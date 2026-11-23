@@ -432,7 +432,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let (weak, tx) = (ui.as_weak(), tx.clone());
         ui.on_soloist_connect(move |address| {
-            dispatch(&weak, &tx, Command::Soloist(address.to_string()))
+            dispatch(
+                &weak,
+                &tx,
+                Command::Soloist {
+                    address: address.to_string(),
+                    activate: false,
+                },
+            )
         });
     }
     {
@@ -445,6 +452,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 executable: executable.to_string(),
                 key: key.to_string(),
                 remember,
+                activate: false,
             };
             if tx.try_send(command).is_ok() {
                 ui.set_soloist_key("".into());
@@ -548,6 +556,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     executable: initial.soloist_executable.clone(),
                     key: String::new(),
                     remember: false,
+                    activate: true,
                 },
             );
         }

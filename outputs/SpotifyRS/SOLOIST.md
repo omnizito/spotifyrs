@@ -8,7 +8,7 @@ O SpotifyRS pode iniciar e controlar o Soloist a partir da página **Ligações*
 4. Se for a primeira vez, abre o Spotify no telemóvel na mesma rede e escolhe **SpotifyRS local** nos dispositivos disponíveis. O SpotifyRS deteta a ligação assim que o Soloist fica emparelhado.
 5. Para reutilizar a chave, marca **Guardar chave neste PC** ao iniciar o Soloist pela app. Nas próximas vezes, podes deixar o campo vazio. **Esquecer chave** remove a entrada do Gestor de Credenciais do Windows ou do cofre Secret Service no Linux.
 
-O SpotifyRS guarda o caminho do executável e o endereço local ao fechar. Marca **Iniciar Soloist ao abrir** para o SpotifyRS o ligar automaticamente nas próximas aberturas. A chave só é guardada quando selecionas **Guardar chave neste PC** e carregas em **Iniciar e ligar Soloist**. O Soloist recebe a chave como argumento de arranque, acessível a processos com permissões suficientes.
+O SpotifyRS guarda o caminho do executável e o endereço local ao fechar. Marca **Iniciar e ativar Soloist ao abrir** para o SpotifyRS ligar o Soloist e ativar a reprodução neste computador assim que estiver emparelhado e inativo. A ativação automática é feita uma vez por arranque. A chave só é guardada quando selecionas **Guardar chave neste PC** e carregas em **Iniciar e ligar Soloist**. O Soloist recebe a chave como argumento de arranque, acessível a processos com permissões suficientes.
 
 ## Escolher o que ouvir
 

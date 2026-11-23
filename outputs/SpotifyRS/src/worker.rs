@@ -16,12 +16,16 @@ use std::{
 
 pub enum Command {
     Login(String),
-    Soloist(String),
+    Soloist {
+        address: String,
+        activate: bool,
+    },
     StartSoloist {
         address: String,
         executable: String,
         key: String,
         remember: bool,
+        activate: bool,
     },
     ForgetSoloistKey,
     ForgetAuthorization,
@@ -154,6 +158,7 @@ pub fn run(
         }
     };
     let mut soloist = None;
+    let mut activate_when_paired = false;
     let mut managed_soloist = None;
     let mut api: Option<SpotifyApi> = None;
     let mut catalog: Option<SpotifyApi> = None;
@@ -183,6 +188,7 @@ pub fn run(
             executable,
             key,
             remember,
+            activate,
         } = command
         {
             state.busy = true;
@@ -197,7 +203,7 @@ pub fn run(
                         managed_soloist = Some(child);
                     }
                     launch_note = warning;
-                    command = Command::Soloist(address);
+                    command = Command::Soloist { address, activate };
                 }
                 Err(error) => {
                     state.busy = false;
@@ -498,8 +504,13 @@ pub fn run(
             emit(state.clone());
             continue;
         }
-        if let Command::Soloist(ref address) = command {
+        if let Command::Soloist {
+            ref address,
+            activate,
+        } = command
+        {
             soloist = None;
+            activate_when_paired = activate;
             state = Snapshot {
                 soloist: true,
                 catalog_ready: catalog.is_some() || api.is_some() || library_api.is_some(),
@@ -535,6 +546,7 @@ pub fn run(
         if let Some(addr) = soloist {
             if matches!(command, Command::Logout | Command::Demo | Command::Login(_)) {
                 soloist = None;
+                activate_when_paired = false;
             } else {
                 let action = match command {
                     Command::Toggle if state.fresh => Some(if state.playback.is_playing {
@@ -583,6 +595,7 @@ pub fn run(
                     continue;
                 }
                 state.busy = false;
+                let mut poll_delay = Duration::from_secs(3);
                 match crate::soloist::request(addr, "get_state") {
                     Ok(value) => {
                         state.connected = true;
@@ -590,6 +603,19 @@ pub fn run(
                         state.playback = crate::soloist::playback(&value);
                         state.devices = state.playback.device.clone().into_iter().collect();
                         state.status = "Soloist ligado · reprodução local neste computador".into();
+                        if std::mem::take(&mut activate_when_paired)
+                            && value["is_active"] == false
+                            && !cancelled.load(Ordering::Relaxed)
+                        {
+                            match crate::soloist::request(addr, "activate") {
+                                Ok(_) => {
+                                    state.status = "Pedido enviado ao Soloist. A atualizar a reprodução…".into();
+                                    state.busy = true;
+                                    poll_delay = Duration::from_millis(650);
+                                }
+                                Err(error) => state.status = error,
+                            }
+                        }
                     }
                     Err(error) => {
                         let waiting_for_pairing = error == crate::soloist::PAIR_REQUIRED;
@@ -601,6 +627,7 @@ pub fn run(
                         state.queue = Arc::default();
                         if !waiting_for_pairing {
                             soloist = None;
+                            activate_when_paired = false;
                         }
                     }
                 }
@@ -608,7 +635,7 @@ pub fn run(
                     state.status.push(' ');
                     state.status.push_str(&note);
                 }
-                next_poll = Instant::now() + Duration::from_secs(3);
+                next_poll = Instant::now() + poll_delay;
                 suspended = false;
                 emit(state.clone());
                 continue;
@@ -874,7 +901,85 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{json, Value};
+    use std::net::TcpListener;
     use std::sync::mpsc;
+    use tungstenite::Message;
+
+    #[test]
+    fn startup_activates_soloist_once_after_pairing() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let server = std::thread::spawn(move || {
+            // The launcher first checks whether the WebSocket port is already open.
+            drop(listener.accept().unwrap().0);
+            let inactive = json!({"type": "playback_state", "is_active": false});
+            let replies = [
+                (
+                    "get_auth_state",
+                    json!({"type": "auth_state", "logged_in": false}),
+                ),
+                ("get_state", json!({"type": "auth_state", "logged_in": false})),
+                ("get_state", inactive.clone()),
+                (
+                    "activate",
+                    json!({"type": "command_result", "command": "activate"}),
+                ),
+                (
+                    "get_state",
+                    json!({"type": "playback_state", "is_active": true}),
+                ),
+                ("get_state", inactive),
+            ];
+            for (command, reply) in replies {
+                let (stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut socket = tungstenite::accept(stream).unwrap();
+                let request = socket.read().unwrap();
+                let request: Value = serde_json::from_str(request.to_text().unwrap()).unwrap();
+                assert_eq!(request, json!({"type": "command", "command": command}));
+                socket
+                    .send(Message::Text(reply.to_string().into()))
+                    .unwrap();
+            }
+        });
+        let (tx, rx) = mpsc::sync_channel(4);
+        let (events, updates) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            run(rx, Arc::new(AtomicBool::new(false)), |state| {
+                events.send(state).unwrap();
+            });
+        });
+        let snapshot = || updates.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        tx.send(Command::StartSoloist {
+            address,
+            executable: String::new(),
+            key: String::new(),
+            remember: false,
+            activate: true,
+        })
+        .unwrap();
+        assert!(snapshot().busy);
+        assert_eq!(snapshot().status, crate::soloist::PAIR_REQUIRED);
+        tx.send(Command::Refresh).unwrap();
+        assert!(snapshot().busy);
+        assert!(snapshot().playback.device.unwrap().is_active);
+        tx.send(Command::Refresh).unwrap();
+        let inactive = snapshot();
+        assert!(!inactive.busy);
+        assert_eq!(
+            inactive.status,
+            "Soloist ligado · reprodução local neste computador"
+        );
+        assert!(!inactive.playback.device.unwrap().is_active);
+
+        tx.send(Command::Stop).unwrap();
+        worker.join().unwrap();
+        server.join().unwrap();
+    }
 
     #[test]
     fn demo_controls_and_logout_work_without_credentials() {

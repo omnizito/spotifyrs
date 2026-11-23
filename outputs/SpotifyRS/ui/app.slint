@@ -798,7 +798,7 @@ export component AppWindow inherits Window {
                                         CheckBox { text: Language.text("Guardar chave neste PC", "Save key on this computer"); checked <=> root.remember-soloist-key; enabled: !root.busy; }
                                         Button { text: Language.text("Esquecer chave", "Forget key"); enabled: !root.busy; clicked => { root.forget-soloist-key(); } }
                                     }
-                                    CheckBox { text: Language.text("Iniciar Soloist ao abrir", "Start Soloist on launch"); checked <=> root.auto-start-soloist; enabled: !root.busy; }
+                                    CheckBox { text: Language.text("Iniciar e ativar Soloist ao abrir", "Start and activate Soloist on launch"); checked <=> root.auto-start-soloist; enabled: !root.busy; }
                                 }
                                 HorizontalLayout {
                                     spacing: 8px;
