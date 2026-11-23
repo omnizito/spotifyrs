@@ -1,9 +1,9 @@
 pkgname=spotifyrs
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc='Experimental native desktop companion for Spotify Connect'
 arch=('x86_64')
-url='https://github.com/eduard770/spotifyrs'
+url='https://github.com/omnizito/spotifyrs'
 license=('MIT' 'LicenseRef-Slint-Royalty-free-2.0')
 depends=('ca-certificates' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme'
          'libx11' 'libxcursor' 'libxi' 'libxkbcommon-x11' 'libxrandr' 'openssl'
@@ -11,11 +11,11 @@ depends=('ca-certificates' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme'
 makedepends=('rust' 'pkgconf')
 optdepends=('gnome-keyring: Secret Service for remembering Spotify authorizations and the Soloist key')
 options=('!debug' '!strip')
-_commit=7787611167fdec27fe7cdfc9a7040768f57d0e86
+_commit=06cccaa6c30f0b1ae204a854b2c414f5bfa2f47a
 _archive="spotifyrs-$_commit"
 _project="$_archive/outputs/SpotifyRS"
-source=("$_archive.tar.gz::https://codeload.github.com/eduard770/spotifyrs/tar.gz/$_commit")
-sha256sums=('a2f2d413a9d0b1e76ae5642aa5ab69f5bc04471d7e24866c023649cd19a450b6')
+source=("$_archive.tar.gz::https://codeload.github.com/omnizito/spotifyrs/tar.gz/$_commit")
+sha256sums=('ac07a8d703b8396443110bd3f6ba6030ba9c60b1fee628ff991f249ef422ad81')
 
 prepare() {
     cd "$srcdir/$_project"
