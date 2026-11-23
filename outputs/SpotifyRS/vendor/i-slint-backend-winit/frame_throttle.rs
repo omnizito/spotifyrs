@@ -51,6 +51,7 @@ impl FrameThrottle for TimerBasedFrameThrottle {
         let refresh_interval_millihertz = winit_window
             .current_monitor()
             .and_then(|monitor| monitor.refresh_rate_millihertz())
+            .filter(|rate| *rate > 0)
             .unwrap_or(60000) as u64;
         let window_adapter = self.window_adapter.clone();
         let timer = Rc::downgrade(&self.timer);

@@ -269,6 +269,11 @@ fn current_settings(ui: &AppWindow) -> Settings {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
+    ui.set_app_version(
+        option_env!("SPOTIFYRS_BUILD_VERSION")
+            .unwrap_or(env!("CARGO_PKG_VERSION"))
+            .into(),
+    );
     track_art::start(&ui)?;
     ui.set_demo_preview(ModelRc::from(Rc::new(VecModel::from(playlist_rows(
         &library::demo(),

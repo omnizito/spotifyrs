@@ -255,6 +255,7 @@ component TrackList inherits ListView {
 export component AppWindow inherits Window {
     init => { Palette.color-scheme = ColorScheme.dark; }
     title: "SpotifyRS";
+    in property <string> app-version;
     icon: @image-url("assets/spotifyrs.svg");
     preferred-width: 1230px;
     preferred-height: 748px;
@@ -437,7 +438,7 @@ export component AppWindow inherits Window {
             background: #232936; border-radius: 14px; border-width: 1px; border-color: #424d61;
             VerticalLayout {
                 padding: 20px; spacing: 14px;
-                Text { text: "SpotifyRS"; color: #f4f6fb; font-size: 20px; font-weight: 700; }
+                Text { text: "SpotifyRS " + root.app-version; color: #f4f6fb; font-size: 20px; font-weight: 700; }
                 Text { text: "Companion independente para reprodução Spotify."; color: #b7bfce; wrap: word-wrap; }
                 AboutSlint { }
                 Button { text: "Fechar"; clicked => { about.close(); } }
