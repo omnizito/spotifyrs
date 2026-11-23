@@ -4,15 +4,24 @@
 
 Browse your Spotify library, choose what plays next, and control playback from a native desktop app for Windows and Linux. SpotifyRS is an independent, experimental project built with Rust and Slint. The interface is available in English and European Portuguese.
 
-[Download for Windows x64](https://github.com/omnizito/spotifyrs/raw/refs/heads/main/outputs/SpotifyRS-Windows-x64.zip) · [Build from source](#build-from-source) · [Set up playback](#set-up-playback)
+[Download for Windows x64](https://github.com/omnizito/spotifyrs/releases/latest/download/SpotifyRS-Windows-x64.zip) · [Download the Linux AppImage](https://github.com/omnizito/spotifyrs/releases/latest/download/SpotifyRS-Linux-x86_64.AppImage) · [Build from source](#build-from-source) · [Set up playback](#set-up-playback)
 
 ![SpotifyRS in demo mode, showing three playlists, sample tracks with artwork, and playback controls along the bottom of the window.](outputs/SpotifyRS/screenshots/home-demo-en.jpg)
 
 ## Try it in a minute
 
-1. Download the Windows ZIP above, extract it, and open `SpotifyRS/spotifyrs.exe`.
-2. To switch to English, open **Definições → Idioma da aplicação → English**.
-3. Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or skip a track and watch the local queue change.
+**Windows x64.** Extract the release ZIP and open `spotifyrs.exe`.
+
+**Linux x86_64.** Download the AppImage, then run these commands in your download directory:
+
+```sh
+chmod +x SpotifyRS-Linux-x86_64.AppImage
+./SpotifyRS-Linux-x86_64.AppImage --demo
+```
+
+If FUSE is unavailable, use `./SpotifyRS-Linux-x86_64.AppImage --appimage-extract-and-run --demo`.
+1. To switch to English, open **Definições → Idioma da aplicação → English**.
+2. Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or skip a track and watch the local queue change.
 
 The demo is silent and works without a Spotify account. To hear music, choose where you want it to play.
 
@@ -23,7 +32,7 @@ The demo is silent and works without a Spotify account. To hear music, choose wh
 | On this computer | The official Soloist executable and a Soloist key | Open **Connections**, enter the executable path and key, then select **Start and connect Soloist**. For the first pairing, select **SpotifyRS local** in Spotify’s device picker on the same network. |
 | On a phone, speaker, or another computer | Spotify Premium, a Spotify developer app, and a Spotify Connect device | Start a track on the device. In SpotifyRS, enter your Client ID under **Connections**, choose **Connect via Web API**, then select the device and **Use device**. |
 
-With Soloist connected, paste a Spotify track link into **Home** and choose **Play link**, or open **Local queue** to pick an upcoming track. If you want the app to activate this computer whenever it opens, enable **Start and activate Soloist on launch**. Automatic activation is available when building from the current `main` branch. The bundled Windows ZIP predates that change. [Soloist setup guide (Portuguese)](outputs/SpotifyRS/SOLOIST.md)
+With Soloist connected, paste a Spotify track link into **Home** and choose **Play link**, or open **Local queue** to pick an upcoming track. If you want the app to activate this computer whenever it opens, enable **Start and activate Soloist on launch**. [Soloist setup guide (Portuguese)](outputs/SpotifyRS/SOLOIST.md)
 
 ### Bring in your library
 
