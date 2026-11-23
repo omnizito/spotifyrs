@@ -1,3 +1,5 @@
+<img src="outputs/SpotifyRS/ui/assets/spotifyrs.svg" alt="SpotifyRS app icon" width="96" height="96">
+
 # SpotifyRS
 
 Browse your Spotify library, choose what plays next, and control playback from a native desktop app for Windows and Linux. SpotifyRS is an independent, experimental project built with Rust and Slint. The interface is available in English and European Portuguese.
