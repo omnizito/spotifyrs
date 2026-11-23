@@ -4,6 +4,7 @@ use crate::{
     library::{self, Library},
     model::{self, Device, Item, Playback, DEMO_TRACKS},
 };
+use rand::seq::SliceRandom;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -39,6 +40,7 @@ pub enum Command {
     Toggle,
     Next,
     Previous,
+    SetShuffle(bool),
     SetVolume(u8),
     Transfer(usize),
     Stop,
@@ -61,6 +63,41 @@ pub struct Snapshot {
     pub status: String,
     pub playback: Playback,
     pub devices: Vec<Device>,
+}
+
+struct DemoQueue {
+    order: [usize; DEMO_TRACKS.len()],
+    cursor: usize,
+}
+
+impl DemoQueue {
+    fn new(current: usize, shuffled: bool) -> Self {
+        let mut order = std::array::from_fn(|index| (current + index) % DEMO_TRACKS.len());
+        if shuffled {
+            order[1..].shuffle(&mut rand::thread_rng());
+        }
+        Self { order, cursor: 0 }
+    }
+
+    fn current(&self) -> usize {
+        self.order[self.cursor]
+    }
+
+    fn step(&mut self, next: bool) {
+        let len = self.order.len();
+        self.cursor = (self.cursor + if next { 1 } else { len - 1 }) % len;
+    }
+
+    fn select(&mut self, index: usize) {
+        if let Some(cursor) = self.order.iter().position(|track| *track == index) {
+            self.cursor = cursor;
+        }
+    }
+
+    fn upcoming(&self) -> impl Iterator<Item = Item> + '_ {
+        (1..self.order.len())
+            .map(|offset| model::demo_track(self.order[(self.cursor + offset) % self.order.len()]))
+    }
 }
 
 fn load_library(
@@ -122,7 +159,7 @@ pub fn run(
     let mut catalog: Option<SpotifyApi> = None;
     let mut library_api = None;
     let mut state = Snapshot::default();
-    let mut demo_index = 0usize;
+    let mut demo_queue = DemoQueue::new(0, false);
     let mut next_poll = Instant::now() + Duration::from_secs(60);
     let mut suspended = false;
     let mut failures = 0u32;
@@ -417,9 +454,7 @@ pub fn run(
             }
             Command::LoadQueue => {
                 let result = if state.demo {
-                    Ok((1..DEMO_TRACKS.len())
-                        .map(|offset| model::demo_track(demo_index + offset))
-                        .collect())
+                    Ok(demo_queue.upcoming().collect())
                 } else if let Some(address) = soloist {
                     crate::soloist::queue(address)
                 } else {
@@ -584,6 +619,12 @@ pub fn run(
         let mut fetch_playback = false;
         let mut confirm_change = false;
         let mut save_failed = false;
+        let update_demo_queue = state.demo
+            && !state.queue.is_empty()
+            && matches!(
+                command,
+                Command::Next | Command::Previous | Command::PlayTrack(_) | Command::SetShuffle(_)
+            );
         match command {
             Command::Login(id) => {
                 let id = id.trim();
@@ -646,7 +687,7 @@ pub fn run(
             }
             Command::Demo => {
                 api = None;
-                demo_index = 0;
+                demo_queue = DemoQueue::new(0, false);
                 state = Snapshot {
                     demo: true,
                     library: Arc::new(library::demo()),
@@ -666,14 +707,8 @@ pub fn run(
             _ if state.demo => match command {
                 Command::Toggle => state.playback.is_playing = !state.playback.is_playing,
                 Command::Next | Command::Previous => {
-                    demo_index = (demo_index
-                        + if matches!(command, Command::Next) {
-                            1
-                        } else {
-                            DEMO_TRACKS.len() - 1
-                        })
-                        % DEMO_TRACKS.len();
-                    state.playback.item = Some(model::demo_track(demo_index));
+                    demo_queue.step(matches!(command, Command::Next));
+                    state.playback.item = Some(model::demo_track(demo_queue.current()));
                     state.playback.progress_ms = Some(0);
                 }
                 Command::PlayTrack(_) => {
@@ -682,10 +717,16 @@ pub fn run(
                         .and_then(|uri| uri.strip_prefix("demo:"))
                         .and_then(|index| index.parse::<usize>().ok())
                     {
-                        demo_index = index;
+                        demo_queue.select(index);
                         state.playback.item = Some(model::demo_track(index));
                         state.playback.is_playing = true;
                         state.playback.progress_ms = Some(0);
+                    }
+                }
+                Command::SetShuffle(enabled) => {
+                    if state.playback.shuffle_state != Some(enabled) {
+                        demo_queue = DemoQueue::new(demo_queue.current(), enabled);
+                        state.playback.shuffle_state = Some(enabled);
                     }
                 }
                 Command::SetVolume(volume) => {
@@ -732,6 +773,19 @@ pub fn run(
                     confirm_change = true;
                 }
             }
+            Command::SetShuffle(enabled) if state.fresh && state.playback.can_shuffle() => {
+                if let (Some(api), Some(device_id)) = (
+                    api.as_mut(),
+                    state
+                        .playback
+                        .device
+                        .as_ref()
+                        .and_then(|device| device.id.as_deref()),
+                ) {
+                    result = api.set_shuffle(device_id, enabled);
+                    confirm_change = true;
+                }
+            }
             Command::SetVolume(volume) if state.fresh => {
                 if let (Some(api), Some(device)) = (api.as_mut(), state.playback.device.as_ref()) {
                     if let Some(id) = device
@@ -753,6 +807,9 @@ pub fn run(
                 }
             }
             _ => {}
+        }
+        if update_demo_queue {
+            state.queue = demo_queue.upcoming().collect();
         }
         if result.is_ok() && fetch_playback {
             if let Some(ref mut api) = api {
@@ -876,6 +933,27 @@ mod tests {
         tx.send(Command::LoadQueue).unwrap();
         let queued = updates.recv_timeout(Duration::from_secs(2)).unwrap();
         assert_eq!(queued.queue[0].name, "Rua sem pressa");
+        tx.send(Command::SetShuffle(true)).unwrap();
+        let shuffled = updates.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(shuffled.playback.shuffle_state, Some(true));
+        assert_eq!(shuffled.playback.item.unwrap().name, "Depois da chuva");
+        let upcoming: std::collections::HashSet<_> = shuffled
+            .queue
+            .iter()
+            .map(|track| track.uri.as_str())
+            .collect();
+        assert_eq!(upcoming.len(), DEMO_TRACKS.len() - 1);
+        assert!(!upcoming.contains("demo:2"));
+        tx.send(Command::Next).unwrap();
+        let advanced = updates.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(advanced.playback.item.unwrap().uri, shuffled.queue[0].uri);
+        tx.send(Command::Previous).unwrap();
+        let previous = updates.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(previous.playback.item.unwrap().uri, "demo:2");
+        tx.send(Command::SetShuffle(false)).unwrap();
+        let sequential = updates.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(sequential.playback.shuffle_state, Some(false));
+        assert_eq!(sequential.queue[0].uri, "demo:3");
         tx.send(Command::Logout).unwrap();
         let state = updates.recv_timeout(Duration::from_secs(2)).unwrap();
         assert!(

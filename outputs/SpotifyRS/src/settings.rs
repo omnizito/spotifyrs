@@ -6,6 +6,14 @@ use std::{
 
 pub const DEFAULT_ADDRESS: &str = "127.0.0.1:9090";
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    #[default]
+    Portuguese,
+    English,
+}
+
 #[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -14,6 +22,7 @@ pub struct Settings {
     pub client_id: String,
     pub remember_soloist_key: bool,
     pub auto_start_soloist: bool,
+    pub language: Language,
 }
 
 pub fn path() -> Option<PathBuf> {
@@ -89,6 +98,7 @@ mod tests {
         settings.client_id = "0123456789abcdef0123456789abcdef".into();
         settings.remember_soloist_key = true;
         settings.auto_start_soloist = true;
+        settings.language = Language::English;
         settings.save(&path).unwrap();
         assert!(Settings::load(&path) == settings);
         settings.auto_start_soloist = false;

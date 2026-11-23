@@ -18,6 +18,14 @@ export struct PlaylistRow {
 }
 
 
+global Language {
+    in-out property <int> index: 0;
+
+    pure public function text(portuguese: string, english: string) -> string {
+        return root.index == 1 ? english : portuguese;
+    }
+}
+
 global Artwork {
     pure public function cover(tone: int) -> image {
         return tone == 0 ? @image-url("assets/noite.jpg") :
@@ -127,8 +135,8 @@ component PlaylistCard inherits Rectangle {
             hit := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.open(); } }
         }
         if !root.demo: Button {
-            text: "No Spotify";
-            accessible-label: "Abrir " + root.playlist.title + " no Spotify";
+            text: Language.text("No Spotify", "On Spotify");
+            accessible-label: Language.text("Abrir ", "Open ") + root.playlist.title + Language.text(" no Spotify", " on Spotify");
             clicked => { root.source-link(); }
         }
     }
@@ -138,6 +146,7 @@ component PlaybackButton inherits FocusScope {
     in property <image> glyph;
     in property <string> label;
     in property <bool> prominent;
+    in property <bool> active;
     callback clicked();
 
     width: root.prominent ? 40px : 36px;
@@ -162,13 +171,18 @@ component PlaybackButton inherits FocusScope {
             ? (!root.enabled ? #454d5a : hit.pressed ? #cbd1db : hit.has-hover ? #ffffff : #f6bb87)
             : root.enabled && hit.has-hover ? #2b303a : transparent;
 
+        if root.active: Rectangle {
+            width: 4px; height: 4px; y: parent.height - 3px;
+            x: (parent.width - self.width) / 2; border-radius: 2px; background: #f6bb87;
+        }
+
         Image {
             width: root.prominent ? 21px : 20px;
             height: self.width;
             source: root.glyph;
             colorize: root.prominent
                 ? (root.enabled ? #141820 : #262b35)
-                : !root.enabled ? #697382 : hit.has-hover ? #f1f3f7 : #b0bac9;
+                : !root.enabled ? #697382 : root.active ? #f6bb87 : hit.has-hover ? #f1f3f7 : #b0bac9;
         }
     }
     hit := TouchArea {
@@ -234,7 +248,7 @@ component TrackList inherits ListView {
                 width: 34px; alignment: center;
                 Button {
                     height: 30px; text: "↗";
-                    accessible-label: "Abrir " + track.title + " no Spotify";
+                    accessible-label: Language.text("Abrir ", "Open ") + track.title + Language.text(" no Spotify", " on Spotify");
                     clicked => { root.source-link(track.uri); }
                 }
             }
@@ -243,7 +257,7 @@ component TrackList inherits ListView {
                 alignment: center;
                 PlaybackButton {
                     glyph: @image-url("assets/play.svg");
-                    label: "Ouvir " + track.title;
+                    label: Language.text("Ouvir ", "Play ") + track.title;
                     enabled: root.ready;
                     clicked => { root.choose(track.uri); }
                 }
@@ -256,6 +270,8 @@ export component AppWindow inherits Window {
     init => { Palette.color-scheme = ColorScheme.dark; }
     title: "SpotifyRS";
     in property <string> app-version;
+    in-out property <int> language-index <=> Language.index;
+    pure callback translate-message(string, int) -> string;
     icon: @image-url("assets/spotifyrs.svg");
     preferred-width: 1230px;
     preferred-height: 748px;
@@ -325,6 +341,9 @@ export component AppWindow inherits Window {
     in property <bool> playing;
     in property <bool> can-toggle;
     in property <bool> can-next;
+    in property <bool> can-shuffle;
+    in property <bool> shuffled;
+    callback set-shuffle(bool);
     in property <bool> can-previous;
     in property <int> volume: -1;
     in property <string> volume-device;
@@ -342,18 +361,18 @@ export component AppWindow inherits Window {
             root.send-queued-volume();
         }
     }
-    in property <string> track-title: "Ainda sem faixa";
+    in property <string> track-title: Language.text("Ainda sem faixa", "No track yet");
     in property <string> track-uri;
     in property <string> track-art-url;
     in property <image> track-art;
     in property <int> track-demo-tone: -1;
-    in property <string> artist: "Escolhe o que queres ouvir";
-    in property <string> device-name: "Sem dispositivo";
+    in property <string> artist: Language.text("Escolhe o que queres ouvir", "Choose something to play");
+    in property <string> device-name: Language.text("Sem dispositivo", "No device");
     in property <string> elapsed: "0:00";
     in property <string> duration: "0:00";
     in property <float> progress;
     in property <string> spotify-url: "https://open.spotify.com";
-    in property <string> status: "Liga o Soloist ou experimenta a demonstração.";
+    in property <string> status: Language.text("Liga o Soloist ou experimenta a demonstração.", "Connect Soloist or try the demo.");
     in property <string> search-note;
     in property <string> queue-note;
     in property <[TrackRow]> tracks;
@@ -424,8 +443,8 @@ export component AppWindow inherits Window {
 
     MenuBar {
         Menu {
-            title: "Ajuda";
-            MenuItem { title: "Sobre"; activated => { about.show(); } }
+            title: Language.text("Ajuda", "Help");
+            MenuItem { title: Language.text("Sobre", "About"); activated => { about.show(); } }
         }
     }
 
@@ -433,15 +452,19 @@ export component AppWindow inherits Window {
         x: (root.width - self.width) / 2;
         y: 120px;
         width: 400px;
-        height: 280px;
+        height: 302px;
         Rectangle {
             background: #232936; border-radius: 14px; border-width: 1px; border-color: #424d61;
             VerticalLayout {
                 padding: 20px; spacing: 14px;
-                Text { text: "SpotifyRS " + root.app-version; color: #f4f6fb; font-size: 20px; font-weight: 700; }
-                Text { text: "Companion independente para reprodução Spotify."; color: #b7bfce; wrap: word-wrap; }
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "SpotifyRS"; color: #f4f6fb; font-size: 20px; font-weight: 700; }
+                    Text { text: Language.text("Versão ", "Version ") + root.app-version; color: #b7bfce; font-size: 13px; }
+                }
+                Text { text: Language.text("Companion independente para reprodução Spotify.", "Independent companion for Spotify playback."); color: #b7bfce; wrap: word-wrap; }
                 AboutSlint { }
-                Button { text: "Fechar"; clicked => { about.close(); } }
+                Button { text: Language.text("Fechar", "Close"); clicked => { about.close(); } }
             }
         }
     }
@@ -468,20 +491,26 @@ export component AppWindow inherits Window {
                             Text { text: "SpotifyRS"; color: #f5f6fa; font-size: 22px; font-weight: 750; }
                         }
                     }
-                    Action { label: "Início"; symbol: "M3 11 L12 3 L21 11 M5 10 V21 H10 V15 H14 V21 H19 V10"; flat: true; selected: root.page == 0 && !root.search-view; clicked => { root.page = 0; root.search-view = false; } }
+                    Action { label: Language.text("Início", "Home"); symbol: "M3 11 L12 3 L21 11 M5 10 V21 H10 V15 H14 V21 H19 V10"; flat: true; selected: root.page == 0 && !root.search-view; clicked => { root.page = 0; root.search-view = false; } }
                     Action {
-                        label: "Fila local"; symbol: "M3 5 H21 M3 11 H17 M3 17 H12 M16 15 L22 18 L16 21 Z"; flat: true; selected: root.page == 1;
+                        label: Language.text("Fila local", "Local queue"); symbol: "M3 5 H21 M3 11 H17 M3 17 H12 M16 15 L22 18 L16 21 Z"; flat: true; selected: root.page == 1;
                         clicked => { root.page = 1; if !root.busy && (root.demo || (root.soloist && root.connected)) { root.load-queue(); } }
                     }
-                    Action { label: "Ligações"; symbol: "M6 3 V8 M12 3 V8 M4 8 H14 V11 Q14 16 9 16 Q4 16 4 11 Z M9 16 V18 Q9 21 13 21 H16 Q20 21 20 17 V13"; flat: true; selected: root.page == 2; clicked => { root.page = 2; } }
+                    Action { label: Language.text("Ligações", "Connections"); symbol: "M6 3 V8 M12 3 V8 M4 8 H14 V11 Q14 16 9 16 Q4 16 4 11 Z M9 16 V18 Q9 21 13 21 H16 Q20 21 20 17 V13"; flat: true; selected: root.page == 2; clicked => { root.page = 2; } }
+                    Action {
+                        label: Language.text("Definições", "Settings");
+                        symbol: "M12 3 L14 6 L18 6 L18 9 L21 12 L18 14 L18 18 L14 18 L12 21 L9 18 L6 18 L6 14 L3 12 L6 9 L6 6 L9 6 Z M12 9 A3 3 0 1 0 12 15 A3 3 0 1 0 12 9";
+                        flat: true; selected: root.page == 4;
+                        clicked => { root.page = 4; }
+                    }
                     Rectangle { height: 1px; background: #36312d; }
-                    Text { height: 32px; vertical-alignment: center; text: "BIBLIOTECA"; color: #b6aaa1; font-size: 11px; letter-spacing: 1.5px; font-weight: 700; }
+                    Text { height: 32px; vertical-alignment: center; text: Language.text("BIBLIOTECA", "LIBRARY"); color: #b6aaa1; font-size: 11px; letter-spacing: 1.5px; font-weight: 700; }
                     if root.demo || root.library-ready: Action {
-                        label: "Faixas guardadas"; symbol: "M12 21 L4 13 Q-1 4 7 4 Q10 4 12 7 Q14 4 17 4 Q25 4 20 13 Z"; flat: true; selected: root.page == 3 && root.selected-collection == "saved"; enabled: !root.busy;
-                        clicked => { root.show-collection("saved", "Faixas guardadas"); }
+                        label: Language.text("Faixas guardadas", "Saved tracks"); symbol: "M12 21 L4 13 Q-1 4 7 4 Q10 4 12 7 Q14 4 17 4 Q25 4 20 13 Z"; flat: true; selected: root.page == 3 && root.selected-collection == "saved"; enabled: !root.busy;
+                        clicked => { root.show-collection("saved", Language.text("Faixas guardadas", "Saved tracks")); }
                     }
                     if !root.demo && !root.library-ready: Action {
-                        label: "Ligar biblioteca"; symbol: "M12 5 V19 M5 12 H19"; flat: true; clicked => { root.page = 2; }
+                        label: Language.text("Ligar biblioteca", "Connect library"); symbol: "M12 5 V19 M5 12 H19"; flat: true; clicked => { root.page = 2; }
                     }
                     ListView {
                         vertical-stretch: 1;
@@ -500,31 +529,31 @@ export component AppWindow inherits Window {
                     if root.library-ready && !root.demo: HorizontalLayout {
                         spacing: 5px;
                         Button {
-                            text: "‹"; accessible-label: "Página anterior de playlists";
+                            text: "‹"; accessible-label: Language.text("Página anterior de playlists", "Previous playlist page");
                             enabled: !root.busy && root.playlist-offset > 0;
                             clicked => { root.load-library(root.playlist-offset / 20 - 1); }
                         }
                         Button {
-                            text: "Atualizar"; enabled: !root.busy;
+                            text: Language.text("Atualizar", "Refresh"); enabled: !root.busy;
                             clicked => { root.load-library(root.playlist-offset / 20); }
                         }
                         Button {
-                            text: "›"; accessible-label: "Mais playlists";
+                            text: "›"; accessible-label: Language.text("Mais playlists", "More playlists");
                             enabled: !root.busy && root.more-playlists;
                             clicked => { root.load-library(root.playlist-offset / 20 + 1); }
                         }
                     }
                     Text {
-                        text: root.demo ? "DEMONSTRAÇÃO" : root.connected ? (root.soloist ? "SOLOIST LOCAL" : "SPOTIFY CONNECT") : "DESLIGADO";
+                        text: root.demo ? Language.text("DEMONSTRAÇÃO", "DEMO") : root.connected ? (root.soloist ? Language.text("SOLOIST LOCAL", "LOCAL SOLOIST") : "SPOTIFY CONNECT") : Language.text("DESLIGADO", "DISCONNECTED");
                         color: root.connected || root.demo ? #f6bb87 : #a7b1c3;
                         font-size: 10px; letter-spacing: 1.2px;
                     }
                     Text {
-                        text: root.demo ? "Faixas fictícias" : root.device-name;
+                        text: root.demo ? Language.text("Faixas fictícias", "Demo tracks") : root.translate-message(root.device-name, root.language-index);
                         color: #d5dcea; font-size: 13px; overflow: elide;
                     }
                     if root.demo || root.connected || root.catalog-ready: Button {
-                        text: "Desligar";
+                        text: Language.text("Desligar", "Disconnect");
                         enabled: !root.busy;
                         clicked => { root.logout(); }
                     }
@@ -541,12 +570,12 @@ export component AppWindow inherits Window {
                     spacing: 8px;
                     LineEdit {
                         text <=> root.query;
-                        placeholder-text: root.guest ? "Pesquisar na demonstração" : "Pesquisar faixas ou artistas";
+                        placeholder-text: root.guest ? Language.text("Pesquisar na demonstração", "Search the demo") : Language.text("Pesquisar faixas ou artistas", "Search tracks or artists");
                         enabled: !root.busy;
                         accepted => { root.submit-search(); }
                     }
                     Button {
-                        text: "Pesquisar"; enabled: !root.busy && root.query != "";
+                        text: Language.text("Pesquisar", "Search"); enabled: !root.busy && root.query != "";
                         clicked => { root.submit-search(); }
                     }
                 }
@@ -560,27 +589,27 @@ export component AppWindow inherits Window {
                         Rectangle { background: @linear-gradient(90deg, #221b1bf2 0%, #23191aa8 44%, #211a1800 78%); }
                         VerticalLayout {
                             padding-left: 24px; padding-right: 14px; alignment: center; spacing: 4px;
-                            Text { text: "A tua música"; color: #fff5e9; font-size: 42px; font-weight: 800; }
-                            Text { text: root.guest ? "Liga a tua conta ou explora a demonstração." : root.demo ? "Biblioteca de demonstração" : "Playlists e faixas guardadas";
+                            Text { text: Language.text("A tua música", "Your music"); color: #fff5e9; font-size: 42px; font-weight: 800; }
+                            Text { text: root.guest ? Language.text("Liga a tua conta ou explora a demonstração.", "Connect your account or explore the demo.") : root.demo ? Language.text("Biblioteca de demonstração", "Demo library") : Language.text("Playlists e faixas guardadas", "Playlists and saved tracks");
                                 color: #e9dcd3; font-size: 13px; }
                             HorizontalLayout {
                                 spacing: 8px; alignment: start;
                                 if !root.demo && !root.library-ready: Action {
-                                    label: "Ligar biblioteca"; primary: true; clicked => { root.page = 2; }
+                                    label: Language.text("Ligar biblioteca", "Connect library"); primary: true; clicked => { root.page = 2; }
                                 }
                                 if root.guest: Action {
-                                    label: "Experimentar demo"; enabled: !root.busy; clicked => { root.demo-start(); }
+                                    label: Language.text("Experimentar demo", "Try the demo"); enabled: !root.busy; clicked => { root.demo-start(); }
                                 }
                                 if root.demo || root.library-ready: Action {
-                                    label: "Faixas guardadas"; primary: true; enabled: !root.busy;
-                                    clicked => { root.show-collection("saved", "Faixas guardadas"); }
+                                    label: Language.text("Faixas guardadas", "Saved tracks"); primary: true; enabled: !root.busy;
+                                    clicked => { root.show-collection("saved", Language.text("Faixas guardadas", "Saved tracks")); }
                                 }
                             }
                         }
                     }
                     if !root.search-view && root.home-playlists.length > 0: VerticalLayout {
                         spacing: 8px; vertical-stretch: 0;
-                        Text { text: root.guest ? "Playlists de demonstração" : "As tuas playlists"; color: #f7f1eb; font-size: 21px; font-weight: 750; }
+                        Text { text: root.guest ? Language.text("Playlists de demonstração", "Demo playlists") : Language.text("As tuas playlists", "Your playlists"); color: #f7f1eb; font-size: 21px; font-weight: 750; }
                         HorizontalLayout {
                             height: 118px + (root.demo || root.guest ? 0px : 35px);
                             spacing: 12px;
@@ -598,26 +627,26 @@ export component AppWindow inherits Window {
                         }
                     }
                     if !root.search-view && root.library-note != "": Text {
-                        text: root.library-note; color: #bfc4bf; wrap: word-wrap;
+                        text: root.translate-message(root.library-note, root.language-index); color: #bfc4bf; wrap: word-wrap;
                     }
                     if !root.demo && !root.guest: HorizontalLayout {
                         spacing: 8px;
                         LineEdit {
-                            text <=> root.link; placeholder-text: "Colar link de uma faixa Spotify";
+                            text <=> root.link; placeholder-text: Language.text("Colar link de uma faixa Spotify", "Paste a Spotify track link");
                             enabled: !root.busy;
                             accepted => { if root.connected && root.link != "" { root.play-track(root.link); } }
                         }
                         Button {
-                            text: "Ouvir link"; enabled: root.connected && !root.busy && root.link != "";
+                            text: Language.text("Ouvir link", "Play link"); enabled: root.connected && !root.busy && root.link != "";
                             clicked => { root.play-track(root.link); }
                         }
                     }
                     if root.search-view || root.demo || root.guest || root.saved-preview.length > 0: Text {
-                        text: root.search-view ? "Resultados da pesquisa" : root.demo || root.guest ? "Faixas de exemplo" : "Faixas guardadas";
+                        text: root.search-view ? Language.text("Resultados da pesquisa", "Search results") : root.demo || root.guest ? Language.text("Faixas de exemplo", "Sample tracks") : Language.text("Faixas guardadas", "Saved tracks");
                         color: #f4f6f4; font-size: 21px; font-weight: 750;
                     }
                     if root.search-view && root.search-note != "": Text {
-                        text: root.search-note; color: #bfc4bf; font-size: 12px; wrap: word-wrap;
+                        text: root.translate-message(root.search-note, root.language-index); color: #bfc4bf; font-size: 12px; wrap: word-wrap;
                     }
                     if root.search-view ? root.tracks.length > 0 : root.guest || root.demo || root.saved-preview.length > 0: TrackList {
                         tracks: root.search-view ? root.tracks : root.guest || root.demo ? root.demo-songs : root.saved-preview;
@@ -636,7 +665,7 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             spacing: 8px; alignment: start;
                             if root.library-ready && root.featured.length == 0 && root.library-note == "": Button {
-                                text: "Carregar playlists"; enabled: !root.busy;
+                                text: Language.text("Carregar playlists", "Load playlists"); enabled: !root.busy;
                                 clicked => { root.load-library(0); }
                             }
                         }
@@ -655,23 +684,23 @@ export component AppWindow inherits Window {
                         Rectangle { background: @linear-gradient(90deg, #171413ef, #17141318); }
                         VerticalLayout {
                             padding: 16px; alignment: center; spacing: 5px;
-                            Text { text: root.selected-collection == "saved" ? "BIBLIOTECA" : "PLAYLIST"; color: #d7dfe9; font-size: 11px; letter-spacing: 1.2px; }
-                            Text { text: root.selected-title; color: #f7f8fa; font-size: 31px; font-weight: 800; overflow: elide; }
+                            Text { text: root.selected-collection == "saved" ? Language.text("BIBLIOTECA", "LIBRARY") : "PLAYLIST"; color: #d7dfe9; font-size: 11px; letter-spacing: 1.2px; }
+                            Text { text: root.selected-collection == "saved" ? Language.text("Faixas guardadas", "Saved tracks") : root.selected-title; color: #f7f8fa; font-size: 31px; font-weight: 800; overflow: elide; }
                         }
                     }
                     HorizontalLayout {
                         spacing: 8px;
-                        Text { text: "Faixas"; color: #f4f6f4; font-size: 21px; font-weight: 750; vertical-alignment: center; }
+                        Text { text: Language.text("Faixas", "Tracks"); color: #f4f6f4; font-size: 21px; font-weight: 750; vertical-alignment: center; }
                         Rectangle { horizontal-stretch: 1; }
                         if !root.demo: Button {
-                            text: "Abrir no Spotify"; clicked => { root.open-content("collection", root.selected-collection); }
+                            text: Language.text("Abrir no Spotify", "Open in Spotify"); clicked => { root.open-content("collection", root.selected-collection); }
                         }
                     }
                     if root.collection-id == root.selected-collection && root.collection-note != "": Text {
-                        text: root.collection-note; color: #bcc3bc; wrap: word-wrap;
+                        text: root.translate-message(root.collection-note, root.language-index); color: #bcc3bc; wrap: word-wrap;
                     }
                     if root.busy && root.collection-id != root.selected-collection: Text {
-                        text: "A carregar faixas…"; color: #bcc3bc;
+                        text: Language.text("A carregar faixas…", "Loading tracks…"); color: #bcc3bc;
                     }
                     if root.collection-id == root.selected-collection: TrackList {
                         tracks: root.collection-tracks; current: root.track-uri;
@@ -684,11 +713,11 @@ export component AppWindow inherits Window {
                     if root.collection-id == root.selected-collection && (root.more-collection-tracks || root.track-offset > 0): HorizontalLayout {
                         spacing: 8px; alignment: end;
                         Button {
-                            text: "Página anterior"; enabled: !root.busy && root.track-offset > 0;
+                            text: Language.text("Página anterior", "Previous page"); enabled: !root.busy && root.track-offset > 0;
                             clicked => { root.open-collection(root.selected-collection, root.track-offset / 20 - 1); }
                         }
                         Button {
-                            text: "Mais faixas"; enabled: !root.busy && root.more-collection-tracks;
+                            text: Language.text("Mais faixas", "More tracks"); enabled: !root.busy && root.more-collection-tracks;
                             clicked => { root.open-collection(root.selected-collection, root.track-offset / 20 + 1); }
                         }
                     }
@@ -697,15 +726,15 @@ export component AppWindow inherits Window {
                 if root.page == 1: VerticalLayout {
                     vertical-stretch: 1; spacing: 10px;
                     HorizontalLayout {
-                        Text { text: "Fila local"; color: #f5f6fa; font-size: 27px; font-weight: 750; vertical-alignment: center; }
+                        Text { text: Language.text("Fila local", "Local queue"); color: #f5f6fa; font-size: 27px; font-weight: 750; vertical-alignment: center; }
                         Rectangle { horizontal-stretch: 1; }
                         Button {
-                            text: "Atualizar fila"; enabled: !root.busy && (root.demo || (root.soloist && root.connected));
+                            text: Language.text("Atualizar fila", "Refresh queue"); enabled: !root.busy && (root.demo || (root.soloist && root.connected));
                             clicked => { root.load-queue(); }
                         }
                     }
                     Text {
-                        text: root.queue-note != "" ? root.queue-note : "Liga o Soloist para ver as próximas faixas.";
+                        text: root.queue-note != "" ? root.translate-message(root.queue-note, root.language-index) : Language.text("Liga o Soloist para ver as próximas faixas.", "Connect Soloist to see upcoming tracks.");
                         color: #b6c1d3; wrap: word-wrap;
                     }
                     TrackList {
@@ -717,49 +746,71 @@ export component AppWindow inherits Window {
                     }
                 }
 
+                if root.page == 4: VerticalLayout {
+                    vertical-stretch: 1; spacing: 14px;
+                    Text { text: Language.text("Definições", "Settings"); color: #f5f6fa; font-size: 27px; font-weight: 750; }
+                    Rectangle {
+                        border-radius: 11px; background: #242221;
+                        VerticalLayout {
+                            padding: 16px; spacing: 9px;
+                            Text { text: Language.text("Idioma da aplicação", "App language"); color: #f5f6fa; font-size: 16px; font-weight: 700; }
+                            ComboBox {
+                                accessible-label: Language.text("Idioma da aplicação", "App language");
+                                model: ["Português (Portugal)", "English"];
+                                current-index <=> root.language-index;
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        Button { text: Language.text("Sobre o SpotifyRS", "About SpotifyRS"); clicked => { about.show(); } }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                }
+
                 if root.page == 2: ScrollView {
                     vertical-stretch: 1;
                     VerticalLayout {
                         spacing: 13px;
-                        Text { text: "Ligações"; color: #f5f6fa; font-size: 27px; font-weight: 750; }
+                        Text { text: Language.text("Ligações", "Connections"); color: #f5f6fa; font-size: 27px; font-weight: 750; }
                         Rectangle {
                             border-radius: 11px; background: #242221;
                             VerticalLayout {
                                 padding: 14px; spacing: 8px;
-                                Text { text: "Reprodução local"; color: #f5f6fa; font-size: 16px; font-weight: 700; }
-                                Text { text: "Inicia o Soloist neste computador ou liga a uma instância já aberta."; color: #b6c1d3; wrap: word-wrap; }
+                                Text { text: Language.text("Reprodução local", "Local playback"); color: #f5f6fa; font-size: 16px; font-weight: 700; }
+                                Text { text: Language.text("Inicia o Soloist neste computador ou liga a uma instância já aberta.", "Start Soloist on this computer or connect to a running instance."); color: #b6c1d3; wrap: word-wrap; }
                                 if root.soloist-launch-supported: VerticalLayout {
                                     spacing: 8px;
                                     LineEdit {
                                         text <=> root.soloist-executable;
-                                        placeholder-text: "Caminho completo do executável do Soloist";
+                                        placeholder-text: Language.text("Caminho completo do executável do Soloist", "Full path to the Soloist executable");
                                         enabled: !root.busy;
                                     }
                                     LineEdit {
                                         text <=> root.soloist-key;
                                         input-type: password;
-                                        placeholder-text: "Chave Soloist (vazio para usar a chave guardada)";
+                                        placeholder-text: Language.text("Chave Soloist (vazio para usar a chave guardada)", "Soloist key (leave blank to use the saved key)");
                                         enabled: !root.busy;
                                     }
                                     HorizontalLayout {
                                         spacing: 8px;
                                         alignment: start;
-                                        CheckBox { text: "Guardar chave neste PC"; checked <=> root.remember-soloist-key; enabled: !root.busy; }
-                                        Button { text: "Esquecer chave"; enabled: !root.busy; clicked => { root.forget-soloist-key(); } }
+                                        CheckBox { text: Language.text("Guardar chave neste PC", "Save key on this computer"); checked <=> root.remember-soloist-key; enabled: !root.busy; }
+                                        Button { text: Language.text("Esquecer chave", "Forget key"); enabled: !root.busy; clicked => { root.forget-soloist-key(); } }
                                     }
-                                    CheckBox { text: "Iniciar Soloist ao abrir"; checked <=> root.auto-start-soloist; enabled: !root.busy; }
+                                    CheckBox { text: Language.text("Iniciar Soloist ao abrir", "Start Soloist on launch"); checked <=> root.auto-start-soloist; enabled: !root.busy; }
                                 }
                                 HorizontalLayout {
                                     spacing: 8px;
                                     LineEdit { text <=> root.soloist-address; enabled: !root.busy; }
                                     if root.soloist-launch-supported: Button {
-                                        text: "Iniciar e ligar Soloist"; primary: true; enabled: !root.busy;
+                                        text: Language.text("Iniciar e ligar Soloist", "Start and connect Soloist"); primary: true; enabled: !root.busy;
                                         clicked => { root.soloist-start(root.soloist-address, root.soloist-executable, root.soloist-key, root.remember-soloist-key); }
                                     }
-                                    Button { text: "Ligar Soloist local"; enabled: !root.busy; clicked => { root.soloist-connect(root.soloist-address); } }
+                                    Button { text: Language.text("Ligar Soloist local", "Connect local Soloist"); enabled: !root.busy; clicked => { root.soloist-connect(root.soloist-address); } }
                                 }
                                 if root.connected && root.soloist: Button {
-                                    text: "Ativar reprodução neste computador";
+                                    text: Language.text("Ativar reprodução neste computador", "Activate playback on this computer");
                                     enabled: !root.busy; clicked => { root.transfer(0); }
                                 }
                             }
@@ -768,33 +819,33 @@ export component AppWindow inherits Window {
                             border-radius: 11px; background: #242221;
                             VerticalLayout {
                                 padding: 14px; spacing: 8px;
-                                Text { text: root.catalog-ready ? "Catálogo autorizado" : "Catálogo e Spotify Connect"; color: #f5f6fa; font-size: 16px; font-weight: 700; }
-                                Text { text: "Autoriza a biblioteca para veres as tuas playlists, faixas guardadas e pesquisares por nome."; color: #b6c1d3; wrap: word-wrap; }
-                                LineEdit { text <=> root.client-id; placeholder-text: "Client ID da aplicação Spotify"; enabled: !root.busy; }
+                                Text { text: root.catalog-ready ? Language.text("Catálogo autorizado", "Catalogue authorised") : Language.text("Catálogo e Spotify Connect", "Catalogue and Spotify Connect"); color: #f5f6fa; font-size: 16px; font-weight: 700; }
+                                Text { text: Language.text("Autoriza a biblioteca para veres as tuas playlists, faixas guardadas e pesquisares por nome.", "Authorise the library to browse your playlists, see saved tracks and search by name."); color: #b6c1d3; wrap: word-wrap; }
+                                LineEdit { text <=> root.client-id; placeholder-text: Language.text("Client ID da aplicação Spotify", "Spotify application Client ID"); enabled: !root.busy; }
                                 HorizontalLayout {
                                     spacing: 8px; alignment: start;
-                                    Button { text: root.library-ready ? "Reautorizar biblioteca" : "Autorizar biblioteca"; primary: true; enabled: !root.busy && root.client-id != ""; clicked => { root.authorize-library(root.client-id); } }
-                                    Button { text: "Autorizar catálogo"; enabled: !root.busy && root.client-id != ""; clicked => { root.authorize-catalog(root.client-id); } }
-                                    Button { text: "Ligar via Web API"; enabled: !root.busy && root.client-id != ""; clicked => { root.login(root.client-id); } }
+                                    Button { text: root.library-ready ? Language.text("Reautorizar biblioteca", "Reauthorise library") : Language.text("Autorizar biblioteca", "Authorise library"); primary: true; enabled: !root.busy && root.client-id != ""; clicked => { root.authorize-library(root.client-id); } }
+                                    Button { text: Language.text("Autorizar catálogo", "Authorise catalogue"); enabled: !root.busy && root.client-id != ""; clicked => { root.authorize-catalog(root.client-id); } }
+                                    Button { text: Language.text("Ligar via Web API", "Connect via Web API"); enabled: !root.busy && root.client-id != ""; clicked => { root.login(root.client-id); } }
                                 }
                                 HorizontalLayout {
                                     spacing: 8px; alignment: start;
-                                    Button { text: "Abrir Spotify for Developers"; enabled: !root.busy; clicked => { root.open-dashboard(); } }
-                                    Button { text: "Esquecer autorização"; enabled: !root.busy; clicked => { root.forget-authorization(); } }
-                                    if root.authorizing: Button { text: "Cancelar autorização"; clicked => { root.cancel-auth(); } }
+                                    Button { text: Language.text("Abrir Spotify for Developers", "Open Spotify for Developers"); enabled: !root.busy; clicked => { root.open-dashboard(); } }
+                                    Button { text: Language.text("Esquecer autorização", "Forget authorisation"); enabled: !root.busy; clicked => { root.forget-authorization(); } }
+                                    if root.authorizing: Button { text: Language.text("Cancelar autorização", "Cancel authorisation"); clicked => { root.cancel-auth(); } }
                                 }
-                                Text { text: "Endereço de retorno: http://127.0.0.1:8888/callback"; color: #a7b1c3; font-size: 12px; wrap: word-wrap; }
+                                Text { text: Language.text("Endereço de retorno: http://127.0.0.1:8888/callback", "Redirect URI: http://127.0.0.1:8888/callback"); color: #a7b1c3; font-size: 12px; wrap: word-wrap; }
                             }
                         }
                         if root.connected && !root.soloist: HorizontalLayout {
                             spacing: 8px;
                             ComboBox { model: root.devices; current-index <=> root.selected-device; enabled: !root.busy; }
-                            Button { text: "Usar dispositivo"; enabled: !root.busy && root.selected-device >= 0; clicked => { root.transfer(root.selected-device); } }
+                            Button { text: Language.text("Usar dispositivo", "Use device"); enabled: !root.busy && root.selected-device >= 0; clicked => { root.transfer(root.selected-device); } }
                         }
                         HorizontalLayout {
                             spacing: 8px; alignment: start;
-                            Button { text: "Experimentar demonstração"; enabled: !root.busy; clicked => { root.page = 0; root.demo-start(); } }
-                            if root.connected: Button { text: "Atualizar estado"; enabled: !root.busy; clicked => { root.refresh(); } }
+                            Button { text: Language.text("Experimentar demonstração", "Try the demo"); enabled: !root.busy; clicked => { root.page = 0; root.demo-start(); } }
+                            if root.connected: Button { text: Language.text("Atualizar estado", "Refresh playback"); enabled: !root.busy; clicked => { root.refresh(); } }
                         }
                     }
                 }
@@ -805,7 +856,7 @@ export component AppWindow inherits Window {
                         source: @image-url("assets/spotify-attribution.svg"); width: 24px; height: 24px;
                     }
                     Text {
-                        text: root.status; color: #a9b5c8; font-size: 12px;
+                        text: root.translate-message(root.status, root.language-index); color: #a9b5c8; font-size: 12px;
                         vertical-alignment: center; overflow: elide; horizontal-stretch: 1;
                     }
                 }
@@ -832,29 +883,38 @@ export component AppWindow inherits Window {
                 }
                 VerticalLayout {
                     width: 181px; alignment: center; spacing: 3px;
-                    Text { text: root.track-title; color: #f5f6fa; font-weight: 700; overflow: elide; }
-                    Text { text: root.artist; color: #aab5c7; font-size: 12px; overflow: elide; }
+                    Text { text: root.track-uri == "" ? root.translate-message(root.track-title, root.language-index) : root.track-title; color: #f5f6fa; font-weight: 700; overflow: elide; }
+                    Text { text: root.track-uri == "" ? root.translate-message(root.artist, root.language-index) : root.artist; color: #aab5c7; font-size: 12px; overflow: elide; }
                 }
                 VerticalLayout {
                     alignment: center; horizontal-stretch: 1; spacing: 8px;
                     HorizontalLayout {
                         alignment: center; spacing: 10px;
                         PlaybackButton {
+                            glyph: @image-url("assets/shuffle.svg");
+                            label: !root.can-shuffle ? Language.text("Reprodução aleatória indisponível", "Shuffle unavailable") :
+                                root.shuffled ? Language.text("Desativar reprodução aleatória", "Turn shuffle off") :
+                                Language.text("Ativar reprodução aleatória", "Turn shuffle on");
+                            active: root.shuffled;
+                            enabled: root.can-shuffle && !root.busy;
+                            clicked => { root.set-shuffle(!root.shuffled); }
+                        }
+                        PlaybackButton {
                             glyph: @image-url("assets/previous.svg");
-                            label: "Anterior";
+                            label: Language.text("Anterior", "Previous");
                             enabled: root.can-previous && !root.busy;
                             clicked => { root.previous(); }
                         }
                         PlaybackButton {
                             glyph: root.playing ? @image-url("assets/pause.svg") : @image-url("assets/play.svg");
-                            label: root.playing ? "Pausar" : "Reproduzir";
+                            label: root.playing ? Language.text("Pausar", "Pause") : Language.text("Reproduzir", "Play");
                             prominent: true;
                             enabled: root.can-toggle && !root.busy;
                             clicked => { root.toggle(); }
                         }
                         PlaybackButton {
                             glyph: @image-url("assets/next.svg");
-                            label: "Seguinte";
+                            label: Language.text("Seguinte", "Next");
                             enabled: root.can-next && !root.busy;
                             clicked => { root.next(); }
                         }
@@ -902,7 +962,7 @@ export component AppWindow inherits Window {
                             color: #aab5c7; horizontal-alignment: right; vertical-alignment: center;
                         }
                     }
-                    if !root.demo && root.connected && root.track-uri != "": Button { text: "Abrir no Spotify"; clicked => { root.open-spotify(); } }
+                    if !root.demo && root.connected && root.track-uri != "": Button { text: Language.text("Abrir no Spotify", "Open in Spotify"); clicked => { root.open-spotify(); } }
                 }
             }
         }

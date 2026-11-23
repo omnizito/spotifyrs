@@ -136,6 +136,7 @@ pub struct Actions {
 pub struct Playback {
     #[serde(default)]
     pub is_playing: bool,
+    pub shuffle_state: Option<bool>,
     pub progress_ms: Option<u64>,
     pub item: Option<Item>,
     pub device: Option<Device>,
@@ -144,6 +145,15 @@ pub struct Playback {
 }
 
 impl Playback {
+    pub fn can_shuffle(&self) -> bool {
+        self.shuffle_state.is_some()
+            && self.permits("toggling_shuffle")
+            && self
+                .device
+                .as_ref()
+                .is_some_and(|device| device.id.is_some())
+    }
+
     pub fn permits(&self, action: &str) -> bool {
         self.device.as_ref().is_some_and(|d| !d.is_restricted)
             && !self.actions.disallows.get(action).copied().unwrap_or(false)
@@ -158,6 +168,7 @@ pub fn clock(ms: u64) -> String {
 pub fn demo_playback(index: usize, playing: bool) -> Playback {
     Playback {
         is_playing: playing,
+        shuffle_state: Some(false),
         progress_ms: Some(72_000),
         item: Some(demo_track(index)),
         device: Some(Device {

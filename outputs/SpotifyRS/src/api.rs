@@ -374,6 +374,15 @@ impl SpotifyApi {
         .map(|_| ())
     }
 
+    pub fn set_shuffle(&mut self, device_id: &str, enabled: bool) -> Result<(), ApiError> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("state", if enabled { "true" } else { "false" })
+            .append_pair("device_id", device_id)
+            .finish();
+        self.request(Method::PUT, &format!("/me/player/shuffle?{query}"), None)
+            .map(|_| ())
+    }
+
     pub fn set_volume(&mut self, device_id: &str, volume: u8) -> Result<(), ApiError> {
         let query = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("volume_percent", &volume.min(100).to_string())
@@ -479,6 +488,17 @@ mod tests {
                 .join()
                 .unwrap()
                 .starts_with(&format!("GET {path}?limit=20&offset=0 ")));
+        }
+    }
+
+    #[test]
+    fn shuffle_sends_explicit_state_to_the_confirmed_device() {
+        for enabled in [true, false] {
+            let (mut api, server) = mock("204 No Content", "", "");
+            api.set_shuffle("device+1", enabled).unwrap();
+            assert!(server.join().unwrap().starts_with(&format!(
+                "PUT /me/player/shuffle?state={enabled}&device_id=device%2B1 "
+            )));
         }
     }
 

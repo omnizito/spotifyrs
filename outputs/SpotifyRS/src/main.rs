@@ -4,7 +4,7 @@ use slint::{ComponentHandle, Image, Model, ModelRc, Rgba8Pixel, SharedPixelBuffe
 use spotifyrs::{
     library::{self, Library, PAGE_SIZE},
     model,
-    settings::{self, Settings},
+    settings::{self, Language, Settings},
     soloist_launcher,
     worker::{self, Command, Snapshot},
 };
@@ -59,6 +59,8 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
     ui.set_playing(p.is_playing);
     ui.set_can_toggle(state.fresh && p.permits(if p.is_playing { "pausing" } else { "resuming" }));
     ui.set_can_next(state.fresh && p.permits("skipping_next"));
+    ui.set_shuffled(p.shuffle_state.unwrap_or(false));
+    ui.set_can_shuffle(state.fresh && p.can_shuffle());
     ui.set_can_previous(state.fresh && p.permits("skipping_prev"));
     ui.set_volume(
         p.device
@@ -262,6 +264,11 @@ fn current_settings(ui: &AppWindow) -> Settings {
         client_id: ui.get_client_id().into(),
         remember_soloist_key: ui.get_remember_soloist_key(),
         auto_start_soloist: ui.get_auto_start_soloist(),
+        language: if ui.get_language_index() == 1 {
+            Language::English
+        } else {
+            Language::Portuguese
+        },
     };
     settings.normalize();
     settings
@@ -292,6 +299,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(Settings::load)
         .unwrap_or_default();
     saved.normalize();
+    ui.on_translate_message(|message, language| {
+        if language == 1 {
+            spotifyrs::locale::english(message.as_str()).as_ref().into()
+        } else {
+            message
+        }
+    });
+    ui.set_language_index(i32::from(saved.language == Language::English));
     let soloist_launch_supported = cfg!(any(windows, target_os = "linux"));
     ui.set_soloist_launch_supported(soloist_launch_supported);
     ui.set_soloist_address(saved.soloist_address.as_str().into());
@@ -456,6 +471,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bind!(on_toggle, Command::Toggle);
     bind!(on_next, Command::Next);
     bind!(on_previous, Command::Previous);
+    {
+        let (weak, tx) = (ui.as_weak(), tx.clone());
+        ui.on_set_shuffle(move |enabled| dispatch(&weak, &tx, Command::SetShuffle(enabled)));
+    }
     {
         let (weak, tx) = (ui.as_weak(), tx.clone());
         ui.on_set_volume(move |volume| {
