@@ -1,0 +1,43 @@
+pkgname=spotifyrs
+pkgver=0.1.0
+pkgrel=2
+pkgdesc='Experimental native desktop companion for Spotify Connect'
+arch=('x86_64')
+url='https://github.com/eduard770/spotifyrs'
+license=('MIT' 'LicenseRef-Slint-Royalty-free-2.0')
+depends=('ca-certificates' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme'
+         'libx11' 'libxcursor' 'libxi' 'libxkbcommon-x11' 'libxrandr' 'openssl'
+         'ttf-font' 'wayland' 'xdg-utils')
+makedepends=('rust' 'pkgconf')
+optdepends=('gnome-keyring: Secret Service for remembering Spotify authorizations and the Soloist key')
+options=('!debug' '!strip')
+_commit=7787611167fdec27fe7cdfc9a7040768f57d0e86
+_archive="spotifyrs-$_commit"
+_project="$_archive/outputs/SpotifyRS"
+source=("$_archive.tar.gz::https://codeload.github.com/eduard770/spotifyrs/tar.gz/$_commit")
+sha256sums=('a2f2d413a9d0b1e76ae5642aa5ab69f5bc04471d7e24866c023649cd19a450b6')
+
+prepare() {
+    cd "$srcdir/$_project"
+    cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+    cd "$srcdir/$_project"
+    CARGO_TARGET_DIR="$srcdir/target" cargo build --frozen --release
+}
+
+check() {
+    cd "$srcdir/$_project"
+    CARGO_TARGET_DIR="$srcdir/target" cargo test --frozen --release
+}
+
+package() {
+    cd "$srcdir/$_project"
+    install -Dm755 "$srcdir/target/release/spotifyrs" "$pkgdir/usr/bin/spotifyrs"
+    install -Dm644 packaging/linux/spotifyrs.desktop "$pkgdir/usr/share/applications/spotifyrs.desktop"
+    install -Dm644 ui/assets/spotifyrs.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/spotifyrs.svg"
+    install -Dm644 "$srcdir/$_archive/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 licenses/Slint-Royalty-free-2.0.md "$pkgdir/usr/share/licenses/$pkgname/Slint-Royalty-free-2.0.md"
+    install -Dm644 THIRD_PARTY_NOTICES.md "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_NOTICES.md"
+}
