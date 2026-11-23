@@ -1,0 +1,81 @@
+name: Desktop release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CARGO_INCREMENTAL: 0
+  SPOTIFYRS_BUILD_VERSION: ${{ github.ref_name }}
+jobs:
+  build:
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: outputs/SpotifyRS
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libssl-dev libxkbcommon-x11-0 xvfb x11-utils
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: cargo +1.99.1 test --locked --release
+      - run: cargo +1.99.1 build --locked --release
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process target/release/spotifyrs.exe -ArgumentList '--demo' -PassThru
+          try {
+            if (-not $p.WaitForInputIdle(30000)) { throw 'Demo window did not start' }
+            for ($i = 0; $i -lt 100 -and $p.MainWindowTitle -ne 'SpotifyRS'; $i++) {
+              Start-Sleep -Milliseconds 200
+              $p.Refresh()
+            }
+            if ($p.MainWindowTitle -ne 'SpotifyRS') { throw 'Demo window missing' }
+          } finally {
+            if (-not $p.HasExited) { $p.Kill() }
+          }
+          mkdir dist, portable
+          Copy-Item target/release/spotifyrs.exe,../../LICENSE,THIRD_PARTY_NOTICES.md,SOLOIST.md,licenses portable -Recurse
+          Compress-Archive portable/* dist/SpotifyRS-Windows-x64.zip
+      - if: runner.os == 'Linux'
+        run: |
+          mkdir dist
+          packaging/linux/build-appimage.sh target/release/spotifyrs dist/SpotifyRS-Linux-x86_64.AppImage
+          xvfb-run -a bash -ec '
+            dist/SpotifyRS-Linux-x86_64.AppImage --appimage-extract-and-run --demo &
+            pid=$!
+            trap "kill $pid 2>/dev/null || true" EXIT
+            for i in {1..100}; do
+              if xwininfo -name SpotifyRS >/dev/null 2>&1; then exit 0; fi
+              kill -0 "$pid"
+              sleep .2
+            done
+            exit 1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spotifyrs-${{ runner.os }}
+          path: outputs/SpotifyRS/dist/*
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          sha256sum SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage > SHA256SUMS.txt
+          gh release create "$TAG" --verify-tag --title "SpotifyRS $TAG" --notes 'Windows x64: extract the ZIP and open spotifyrs.exe. Linux x86_64: make the AppImage executable with chmod +x and launch it from your desktop. Use --demo to try it without credentials. Soloist is installed separately for local playback.' SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage SHA256SUMS.txt
