@@ -14,6 +14,59 @@ export struct PlaylistRow {
     tone: int,
 }
 
+
+global Artwork {
+    pure public function cover(tone: int) -> image {
+        return tone == 0 ? @image-url("assets/noite.jpg") :
+            tone == 1 ? @image-url("assets/mare.jpg") : @image-url("assets/estrada.jpg");
+    }
+}
+
+component Action inherits FocusScope {
+    in property <string> label;
+    in property <string> symbol;
+    in property <bool> selected;
+    in property <bool> primary;
+    in property <bool> flat;
+    callback clicked();
+    height: 36px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    key-pressed(event) => {
+        if root.enabled && (event.text == Key.Space || event.text == Key.Return) {
+            if !event.repeat { root.clicked(); }
+            return accept;
+        }
+        return reject;
+    }
+    Rectangle {
+        border-radius: root.primary ? 18px : 7px;
+        border-width: root.has-focus ? 2px : 0px;
+        border-color: #ffe3c9;
+        background: root.primary ? (hit.has-hover ? #ffd8af : #f6bb87) :
+            root.selected ? #3c3027 : hit.has-hover ? #302c2b : root.flat ? transparent : #302d2b;
+        HorizontalLayout {
+            spacing: 10px; padding-left: 13px; padding-right: 13px;
+            if root.symbol != "": VerticalLayout {
+                width: 20px; alignment: center;
+                Path {
+                    height: 18px; width: 18px; viewbox-width: 24; viewbox-height: 24;
+                    commands: root.symbol; fill: transparent; stroke-width: 1.8px;
+                    stroke: root.selected ? #ffc99e : #d9cec4;
+                }
+            }
+            Text {
+                text: root.label; font-size: 13px; font-weight: root.primary || root.selected ? 700 : 550;
+                color: !root.enabled ? #958d88 : root.primary ? #241911 : root.selected ? #ffd2b0 : #efebe6;
+                vertical-alignment: center; overflow: elide;
+            }
+        }
+    }
+    hit := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
 component PlaylistCard inherits Rectangle {
     in property <PlaylistRow> playlist;
     in property <bool> enabled;
@@ -21,17 +74,16 @@ component PlaylistCard inherits Rectangle {
     callback open();
     callback source-link();
 
-    min-width: 105px;
-    preferred-width: 151px;
-    max-width: 151px;
-    horizontal-stretch: 0;
+    min-width: 80px; preferred-width: 80px;
+    horizontal-stretch: 1;
     vertical-stretch: 0;
     border-radius: 8px;
-    background: target.has-focus || hit.has-hover ? #292c29 : #1d1f1d;
+    background: target.has-focus || hit.has-hover ? #39322e : #24211f;
+    border-width: target.has-focus ? 2px : 0px; border-color: #f6bb87;
     VerticalLayout {
-        padding: 9px; spacing: 7px;
+        padding: 6px; spacing: 4px;
         target := FocusScope {
-            height: 156px;
+            vertical-stretch: 1;
             enabled: root.enabled;
             accessible-role: button;
             accessible-label: root.playlist.title;
@@ -47,7 +99,7 @@ component PlaylistCard inherits Rectangle {
             VerticalLayout {
                 spacing: 8px;
                 Rectangle {
-                    height: 122px;
+                    vertical-stretch: 1; clip: true;
                     border-radius: 6px;
                     background: root.playlist.art.width > 0 ? #151715 :
                         root.playlist.tone == 0 ? @linear-gradient(140deg, #3e225d, #a95779) :
@@ -58,13 +110,14 @@ component PlaylistCard inherits Rectangle {
                         source: root.playlist.art;
                         image-fit: contain;
                     }
-                    if root.playlist.art.width == 0: Text {
+                    if root.playlist.art.width == 0 && root.demo: Image { source: Artwork.cover(root.playlist.tone); image-fit: cover; }
+                    if root.playlist.art.width == 0 && !root.demo: Text {
                         text: "♫"; color: #f6f4f3; font-size: 44px;
                         horizontal-alignment: center; vertical-alignment: center;
                     }
                 }
                 Text {
-                    text: root.playlist.title; color: #f5f6f5; font-size: 14px;
+                    height: 22px; text: root.playlist.title; color: #f5f6f5; font-size: 14px;
                     font-weight: 700; overflow: elide; vertical-alignment: center;
                 }
             }
@@ -101,9 +154,9 @@ component PlaybackButton inherits FocusScope {
     Rectangle {
         border-radius: self.width / 2;
         border-width: root.has-focus && root.enabled ? 2px : 0px;
-        border-color: #b6efbd;
+        border-color: #f6bb87;
         background: root.prominent
-            ? (!root.enabled ? #454d5a : hit.pressed ? #cbd1db : hit.has-hover ? #ffffff : #f1f3f7)
+            ? (!root.enabled ? #454d5a : hit.pressed ? #cbd1db : hit.has-hover ? #ffffff : #f6bb87)
             : root.enabled && hit.has-hover ? #2b303a : transparent;
 
         Image {
@@ -134,7 +187,7 @@ component TrackList inherits ListView {
         height: 53px;
         width: parent.width;
         border-radius: 7px;
-        background: track.uri == root.current ? #202e2a : hit.has-hover ? #212630 : transparent;
+        background: track.uri == root.current ? #382d25 : hit.has-hover ? #212630 : transparent;
         hit := TouchArea {
             enabled: root.ready;
             mouse-cursor: pointer;
@@ -147,24 +200,15 @@ component TrackList inherits ListView {
             alignment: stretch;
             Text {
                 width: 24px; text: track.uri == root.current ? "♪" : index + 1;
-                color: track.uri == root.current ? #b6efbd : #9ca7b9;
+                color: track.uri == root.current ? #f6bb87 : #9ca7b9;
                 font-size: 12px; vertical-alignment: center;
-            }
-            VerticalLayout {
-                width: 34px;
-                alignment: center;
-                Rectangle {
-                    height: 34px; border-radius: 7px;
-                    background: Math.mod(index, 3) == 0 ? #2d3850 : Math.mod(index, 3) == 1 ? #403050 : #2d4544;
-                    Text { text: "♪"; color: #d9e1ef; horizontal-alignment: center; vertical-alignment: center; }
-                }
             }
             VerticalLayout {
                 horizontal-stretch: 1;
                 alignment: center;
                 spacing: 2px;
                 Text {
-                    text: track.title; color: track.uri == root.current ? #b6efbd : #f5f6fa;
+                    text: track.title; color: track.uri == root.current ? #f6bb87 : #f5f6fa;
                     font-weight: 650; overflow: elide;
                 }
                 Text { text: track.artist; color: #a6b0c0; font-size: 12px; overflow: elide; }
@@ -179,12 +223,11 @@ component TrackList inherits ListView {
                 }
             }
             VerticalLayout {
-                width: 62px;
+                width: 36px;
                 alignment: center;
-                Button {
-                    height: 32px;
-                    text: "Ouvir";
-                    accessible-label: "Ouvir " + track.title;
+                PlaybackButton {
+                    glyph: @image-url("assets/play.svg");
+                    label: "Ouvir " + track.title;
                     enabled: root.ready;
                     clicked => { root.choose(track.uri); }
                 }
@@ -201,7 +244,7 @@ export component AppWindow inherits Window {
     preferred-height: 748px;
     min-width: 820px;
     min-height: 635px;
-    background: #090a09;
+    background: #111110;
     default-font-family: "Segoe UI";
     default-font-size: 14px;
 
@@ -239,7 +282,28 @@ export component AppWindow inherits Window {
     private property <string> selected-collection;
     private property <string> selected-title;
     private property <bool> search-view;
-    changed demo => { root.search-view = false; }
+    in property <[PlaylistRow]> demo-preview;
+    in property <[TrackRow]> demo-songs;
+    private property <string> preview-track;
+    private property <bool> preview-search;
+    private property <bool> guest: !root.demo && !root.connected && !root.library-ready && !root.catalog-ready;
+    private property <string> preview-id;
+    private property <string> preview-title;
+    private property <[PlaylistRow]> home-playlists: root.guest ? root.demo-preview : root.featured;
+    changed demo => {
+        root.search-view = false;
+        if root.demo && root.preview-id != "" {
+            root.show-collection(root.preview-id, root.preview-title);
+            root.preview-id = "";
+        } else if root.demo && root.preview-track != "" {
+            root.play-track(root.preview-track);
+            root.preview-track = "";
+        } else if root.demo && root.preview-search {
+            root.search-view = true;
+            root.search(root.query);
+            root.preview-search = false;
+        }
+    }
     in property <bool> fresh;
     in property <bool> playing;
     in property <bool> can-toggle;
@@ -308,6 +372,18 @@ export component AppWindow inherits Window {
         root.open-collection(id, 0);
     }
 
+    function submit-search() {
+        if root.query == "" || root.busy { return; }
+        root.page = 0;
+        if root.guest {
+            root.preview-search = true;
+            root.demo-start();
+        } else {
+            root.search-view = true;
+            root.search(root.query);
+        }
+    }
+
     function commit-volume(value: float) {
         root.queued-volume = round(clamp(value, 0, 100));
         root.volume-draft = root.queued-volume;
@@ -358,46 +434,45 @@ export component AppWindow inherits Window {
 
     VerticalLayout {
         HorizontalLayout {
-            vertical-stretch: 1; padding: 8px; spacing: 8px;
+            vertical-stretch: 1; padding: 10px; spacing: 10px;
             Rectangle {
-                width: 219px;
-                border-radius: 9px; background: #141614;
+                width: 196px;
+                border-radius: 11px; background: #171615;
                 VerticalLayout {
                     padding: 12px; spacing: 8px;
                     HorizontalLayout {
-                        height: 52px; spacing: 10px;
-                        Image { width: 38px; height: 38px; source: root.icon; }
+                        height: 62px; spacing: 10px;
+                        VerticalLayout { width: 34px; alignment: center; Image { width: 34px; height: 34px; source: root.icon; } }
                         VerticalLayout {
                             alignment: center;
-                            Text { text: "SpotifyRS"; color: #f5f6fa; font-size: 17px; font-weight: 750; }
+                            Text { text: "SpotifyRS"; color: #f5f6fa; font-size: 22px; font-weight: 750; }
                         }
                     }
-                    Button { text: "Início"; primary: root.page == 0 && !root.search-view; clicked => { root.page = 0; root.search-view = false; } }
-                    Button {
-                        text: "Fila local"; primary: root.page == 1;
+                    Action { label: "Início"; symbol: "M3 11 L12 3 L21 11 M5 10 V21 H10 V15 H14 V21 H19 V10"; flat: true; selected: root.page == 0 && !root.search-view; clicked => { root.page = 0; root.search-view = false; } }
+                    Action {
+                        label: "Fila local"; symbol: "M3 5 H21 M3 11 H17 M3 17 H12 M16 15 L22 18 L16 21 Z"; flat: true; selected: root.page == 1;
                         clicked => { root.page = 1; if !root.busy && (root.demo || (root.soloist && root.connected)) { root.load-queue(); } }
                     }
-                    Button { text: "Ligações"; primary: root.page == 2; clicked => { root.page = 2; } }
-                    Rectangle { height: 1px; background: #303430; }
-                    Text { text: "A tua biblioteca"; color: #f3f6f3; font-size: 17px; font-weight: 700; }
-                    if root.demo || root.library-ready: Button {
-                        text: "♥   Faixas guardadas"; enabled: !root.busy;
+                    Action { label: "Ligações"; symbol: "M6 3 V8 M12 3 V8 M4 8 H14 V11 Q14 16 9 16 Q4 16 4 11 Z M9 16 V18 Q9 21 13 21 H16 Q20 21 20 17 V13"; flat: true; selected: root.page == 2; clicked => { root.page = 2; } }
+                    Rectangle { height: 1px; background: #36312d; }
+                    Text { height: 32px; vertical-alignment: center; text: "BIBLIOTECA"; color: #b6aaa1; font-size: 11px; letter-spacing: 1.5px; font-weight: 700; }
+                    if root.demo || root.library-ready: Action {
+                        label: "Faixas guardadas"; symbol: "M12 21 L4 13 Q-1 4 7 4 Q10 4 12 7 Q14 4 17 4 Q25 4 20 13 Z"; flat: true; selected: root.page == 3 && root.selected-collection == "saved"; enabled: !root.busy;
                         clicked => { root.show-collection("saved", "Faixas guardadas"); }
                     }
-                    if !root.demo && !root.library-ready: Button {
-                        text: "Ligar biblioteca"; clicked => { root.page = 2; }
+                    if !root.demo && !root.library-ready: Action {
+                        label: "Ligar biblioteca"; symbol: "M12 5 V19 M5 12 H19"; flat: true; clicked => { root.page = 2; }
                     }
                     ListView {
                         vertical-stretch: 1;
                         for playlist in root.playlists: Rectangle {
                             width: parent.width; height: 39px;
-                            Button {
-                                text: playlist.title;
+                            Action {
+                                label: playlist.title;
+                                flat: true;
                                 width: parent.width; height: parent.height - 3px;
-                                icon: playlist.art;
-                                icon-size: 24px;
                                 enabled: !root.busy;
-                                primary: root.page == 3 && root.selected-collection == playlist.id;
+                                selected: root.page == 3 && root.selected-collection == playlist.id;
                                 clicked => { root.show-collection(playlist.id, playlist.title); }
                             }
                         }
@@ -421,7 +496,7 @@ export component AppWindow inherits Window {
                     }
                     Text {
                         text: root.demo ? "DEMONSTRAÇÃO" : root.connected ? (root.soloist ? "SOLOIST LOCAL" : "SPOTIFY CONNECT") : "DESLIGADO";
-                        color: root.connected || root.demo ? #b6efbd : #a7b1c3;
+                        color: root.connected || root.demo ? #f6bb87 : #a7b1c3;
                         font-size: 10px; letter-spacing: 1.2px;
                     }
                     Text {
@@ -437,7 +512,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-              border-radius: 9px; background: #141614; horizontal-stretch: 1;
+              border-radius: 11px; background: #191817; horizontal-stretch: 1;
               VerticalLayout {
                 horizontal-stretch: 1;
                 padding-left: 24px; padding-right: 24px; padding-top: 14px; padding-bottom: 10px;
@@ -446,46 +521,58 @@ export component AppWindow inherits Window {
                     spacing: 8px;
                     LineEdit {
                         text <=> root.query;
-                        placeholder-text: "Pesquisar faixas ou artistas";
+                        placeholder-text: root.guest ? "Pesquisar na demonstração" : "Pesquisar faixas ou artistas";
                         enabled: !root.busy;
-                        accepted => { if root.query != "" { root.page = 0; root.search-view = true; root.search(root.query); } }
+                        accepted => { root.submit-search(); }
                     }
                     Button {
                         text: "Pesquisar"; enabled: !root.busy && root.query != "";
-                        clicked => { root.page = 0; root.search-view = true; root.search(root.query); }
+                        clicked => { root.submit-search(); }
                     }
                 }
 
                 if root.page == 0: VerticalLayout {
                     vertical-stretch: 1; spacing: 12px;
                     if !root.search-view: Rectangle {
-                        height: 78px; border-radius: 8px;
-                        background: @linear-gradient(120deg, #244634 0%, #16271d 65%, #181a18 100%);
-                        HorizontalLayout {
-                            padding-left: 19px; padding-right: 16px; spacing: 8px;
-                            Text { text: "A tua música"; color: #f8faf8; font-size: 33px; font-weight: 800; vertical-alignment: center; }
-                            Rectangle { horizontal-stretch: 1; }
-                            VerticalLayout {
-                                alignment: center;
-                                if !root.demo && !root.library-ready: Button {
-                                    text: "Ligar biblioteca"; primary: true; clicked => { root.page = 2; }
+                        min-height: 130px; preferred-height: 146px; max-height: 146px;
+                        border-radius: 12px; clip: true; background: #392c28;
+                        Image { source: @image-url("assets/listening-room.jpg"); image-fit: cover; }
+                        Rectangle { background: @linear-gradient(90deg, #221b1bf2 0%, #23191aa8 44%, #211a1800 78%); }
+                        VerticalLayout {
+                            padding-left: 24px; padding-right: 14px; alignment: center; spacing: 4px;
+                            Text { text: "A tua música"; color: #fff5e9; font-size: 42px; font-weight: 800; }
+                            Text { text: root.guest ? "Liga a tua conta ou explora a demonstração." : root.demo ? "Biblioteca de demonstração" : "Playlists e faixas guardadas";
+                                color: #e9dcd3; font-size: 13px; }
+                            HorizontalLayout {
+                                spacing: 8px; alignment: start;
+                                if !root.demo && !root.library-ready: Action {
+                                    label: "Ligar biblioteca"; primary: true; clicked => { root.page = 2; }
                                 }
-                                if root.demo || root.library-ready: Button {
-                                    text: "Faixas guardadas"; enabled: !root.busy;
+                                if root.guest: Action {
+                                    label: "Experimentar demo"; enabled: !root.busy; clicked => { root.demo-start(); }
+                                }
+                                if root.demo || root.library-ready: Action {
+                                    label: "Faixas guardadas"; primary: true; enabled: !root.busy;
                                     clicked => { root.show-collection("saved", "Faixas guardadas"); }
                                 }
                             }
                         }
                     }
-                    if !root.search-view && root.featured.length > 0: VerticalLayout {
+                    if !root.search-view && root.home-playlists.length > 0: VerticalLayout {
                         spacing: 8px; vertical-stretch: 0;
-                        Text { text: "As tuas playlists"; color: #f4f6f4; font-size: 21px; font-weight: 750; }
+                        Text { text: root.guest ? "Playlists de demonstração" : "As tuas playlists"; color: #f7f1eb; font-size: 21px; font-weight: 750; }
                         HorizontalLayout {
-                            height: root.demo ? 174px : 213px;
-                            spacing: 10px; alignment: start;
-                            for playlist in root.featured: PlaylistCard {
-                                playlist: playlist; enabled: !root.busy; demo: root.demo;
-                                open => { root.show-collection(playlist.id, playlist.title); }
+                            height: 118px + (root.demo || root.guest ? 0px : 35px);
+                            spacing: 12px;
+                            for playlist in root.home-playlists: PlaylistCard {
+                                playlist: playlist; enabled: !root.busy; demo: root.demo || root.guest;
+                                open => {
+                                    if root.guest {
+                                        root.preview-id = playlist.id;
+                                        root.preview-title = playlist.title;
+                                        root.demo-start();
+                                    } else { root.show-collection(playlist.id, playlist.title); }
+                                }
                                 source-link => { root.open-content("collection", playlist.id); }
                             }
                         }
@@ -493,7 +580,7 @@ export component AppWindow inherits Window {
                     if !root.search-view && root.library-note != "": Text {
                         text: root.library-note; color: #bfc4bf; wrap: word-wrap;
                     }
-                    if !root.demo: HorizontalLayout {
+                    if !root.demo && !root.guest: HorizontalLayout {
                         spacing: 8px;
                         LineEdit {
                             text <=> root.link; placeholder-text: "Colar link de uma faixa Spotify";
@@ -505,34 +592,29 @@ export component AppWindow inherits Window {
                             clicked => { root.play-track(root.link); }
                         }
                     }
-                    if root.search-view || root.demo || root.saved-preview.length > 0: Text {
-                        text: root.search-view ? "Resultados da pesquisa" : root.demo ? "Faixas de exemplo" : "Faixas guardadas";
+                    if root.search-view || root.demo || root.guest || root.saved-preview.length > 0: Text {
+                        text: root.search-view ? "Resultados da pesquisa" : root.demo || root.guest ? "Faixas de exemplo" : "Faixas guardadas";
                         color: #f4f6f4; font-size: 21px; font-weight: 750;
                     }
                     if root.search-view && root.search-note != "": Text {
                         text: root.search-note; color: #bfc4bf; font-size: 12px; wrap: word-wrap;
                     }
-                    if (root.search-view || root.demo ? root.tracks.length > 0 : root.saved-preview.length > 0): TrackList {
-                        tracks: root.search-view || root.demo ? root.tracks : root.saved-preview;
+                    if root.search-view ? root.tracks.length > 0 : root.guest || root.demo || root.saved-preview.length > 0: TrackList {
+                        tracks: root.search-view ? root.tracks : root.guest || root.demo ? root.demo-songs : root.saved-preview;
                         current: root.track-uri;
-                        ready: (root.connected || root.demo) && !root.busy;
-                        spotify-links: !root.demo;
-                        choose(uri) => { root.play-track(uri); }
+                        ready: (root.guest || root.connected || root.demo) && !root.busy;
+                        spotify-links: !root.demo && !root.guest;
+                        choose(uri) => {
+                            if root.guest { root.preview-track = uri; root.demo-start(); }
+                            else { root.play-track(uri); }
+                        }
                         source-link(uri) => { root.open-content("track", uri); }
                         vertical-stretch: 1;
                     }
-                    if !root.demo && !root.search-view && root.saved-preview.length == 0: Rectangle {
+                    if !root.guest && !root.demo && !root.search-view && root.saved-preview.length == 0: Rectangle {
                         vertical-stretch: 1;
                         VerticalLayout {
                             spacing: 8px; alignment: start;
-                            if !root.library-ready: Text {
-                                text: "Liga a tua conta para veres as playlists e as faixas guardadas.";
-                                color: #bfc4bf; wrap: word-wrap;
-                            }
-                            if !root.library-ready: Button {
-                                text: "Experimentar demonstração"; enabled: !root.busy;
-                                clicked => { root.demo-start(); }
-                            }
                             if root.library-ready && root.featured.length == 0 && root.library-note == "": Button {
                                 text: "Carregar playlists"; enabled: !root.busy;
                                 clicked => { root.load-library(0); }
@@ -544,8 +626,13 @@ export component AppWindow inherits Window {
                 if root.page == 3: VerticalLayout {
                     vertical-stretch: 1; spacing: 12px;
                     Rectangle {
-                        height: 101px; border-radius: 8px;
-                        background: @linear-gradient(120deg, #354a65 0%, #222932 100%);
+                        height: 118px; border-radius: 10px; clip: true;
+                        background: @linear-gradient(120deg, #58392e 0%, #30272c 100%);
+                        if root.demo && root.selected-collection != "saved": Image {
+                            source: Artwork.cover(root.selected-collection == "demo-noite" ? 0 : root.selected-collection == "demo-calma" ? 1 : 2);
+                            image-fit: cover;
+                        }
+                        Rectangle { background: @linear-gradient(90deg, #171413ef, #17141318); }
                         VerticalLayout {
                             padding: 16px; alignment: center; spacing: 5px;
                             Text { text: root.selected-collection == "saved" ? "BIBLIOTECA" : "PLAYLIST"; color: #d7dfe9; font-size: 11px; letter-spacing: 1.2px; }
@@ -616,7 +703,7 @@ export component AppWindow inherits Window {
                         spacing: 13px;
                         Text { text: "Ligações"; color: #f5f6fa; font-size: 27px; font-weight: 750; }
                         Rectangle {
-                            border-radius: 11px; background: #1c202a;
+                            border-radius: 11px; background: #242221;
                             VerticalLayout {
                                 padding: 14px; spacing: 8px;
                                 Text { text: "Reprodução local"; color: #f5f6fa; font-size: 16px; font-weight: 700; }
@@ -658,7 +745,7 @@ export component AppWindow inherits Window {
                             }
                         }
                         Rectangle {
-                            border-radius: 11px; background: #1c202a;
+                            border-radius: 11px; background: #242221;
                             VerticalLayout {
                                 padding: 14px; spacing: 8px;
                                 Text { text: root.catalog-ready ? "Catálogo autorizado" : "Catálogo e Spotify Connect"; color: #f5f6fa; font-size: 16px; font-weight: 700; }
@@ -705,9 +792,9 @@ export component AppWindow inherits Window {
               }
             }
         }
-        Rectangle { height: 1px; background: #303542; }
+        Rectangle { height: 1px; background: #36312d; }
         Rectangle {
-            height: 85px; background: #090a09;
+            height: 85px; background: #141312;
             HorizontalLayout {
                 padding-left: 16px; padding-right: 16px; spacing: 17px;
                 VerticalLayout {
@@ -715,8 +802,9 @@ export component AppWindow inherits Window {
                     alignment: center;
                     Rectangle {
                         height: 44px; border-radius: 9px;
-                        background: @linear-gradient(130deg, #514164 0%, #2c4949 100%);
-                        Text { text: "♪"; color: #e8eef9; font-size: 21px; horizontal-alignment: center; vertical-alignment: center; }
+                        background: #292520; clip: true;
+                        if root.demo: Image { source: Artwork.cover(0); image-fit: cover; }
+                        if !root.demo: Text { text: "♪"; color: #e8eef9; font-size: 21px; horizontal-alignment: center; vertical-alignment: center; }
                     }
                 }
                 VerticalLayout {
@@ -755,7 +843,7 @@ export component AppWindow inherits Window {
                             horizontal-stretch: 1; alignment: center;
                             Rectangle {
                                 height: 4px; border-radius: 2px; background: #3b4354;
-                                Rectangle { x: 0px; y: 0px; width: parent.width * root.progress; height: 4px; border-radius: 2px; background: #b6efbd; }
+                                Rectangle { x: 0px; y: 0px; width: parent.width * root.progress; height: 4px; border-radius: 2px; background: #f6bb87; }
                             }
                         }
                         Text { text: root.duration; color: #aab5c7; font-size: 11px; vertical-alignment: center; }
@@ -791,7 +879,7 @@ export component AppWindow inherits Window {
                             color: #aab5c7; horizontal-alignment: right; vertical-alignment: center;
                         }
                     }
-                    Button { text: "Abrir no Spotify"; enabled: root.connected && root.track-uri != ""; clicked => { root.open-spotify(); } }
+                    if !root.demo && root.connected && root.track-uri != "": Button { text: "Abrir no Spotify"; clicked => { root.open-spotify(); } }
                 }
             }
         }

@@ -155,6 +155,30 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
     ui.set_busy(state.busy);
 }
 
+fn playlist_rows(library: &Library) -> Vec<PlaylistRow> {
+    library
+        .playlists
+        .iter()
+        .enumerate()
+        .map(|(index, playlist)| PlaylistRow {
+            id: playlist.id.as_str().into(),
+            title: playlist.name.as_str().into(),
+            art: playlist
+                .cover
+                .as_ref()
+                .map(|cover| {
+                    Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
+                        &cover.pixels,
+                        cover.width,
+                        cover.height,
+                    ))
+                })
+                .unwrap_or_default(),
+            tone: (index % 4) as i32,
+        })
+        .collect()
+}
+
 fn render_library(ui: &AppWindow, library: &Library, playlists_changed: bool) {
     ui.set_library_ready(library.ready);
     ui.set_library_note(library.note.as_str().into());
@@ -165,27 +189,7 @@ fn render_library(ui: &AppWindow, library: &Library, playlists_changed: bool) {
     ui.set_track_offset(library.track_offset as i32);
     ui.set_more_collection_tracks(library.more_tracks);
     if playlists_changed {
-        let rows: Vec<_> = library
-            .playlists
-            .iter()
-            .enumerate()
-            .map(|(index, playlist)| PlaylistRow {
-                id: playlist.id.as_str().into(),
-                title: playlist.name.as_str().into(),
-                art: playlist
-                    .cover
-                    .as_ref()
-                    .map(|cover| {
-                        Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-                            &cover.pixels,
-                            cover.width,
-                            cover.height,
-                        ))
-                    })
-                    .unwrap_or_default(),
-                tone: (index % 4) as i32,
-            })
-            .collect();
+        let rows = playlist_rows(library);
         ui.set_featured(ModelRc::from(Rc::new(VecModel::from(
             rows.iter().take(4).cloned().collect::<Vec<_>>(),
         ))));
@@ -241,6 +245,15 @@ fn current_settings(ui: &AppWindow) -> Settings {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
+    ui.set_demo_preview(ModelRc::from(Rc::new(VecModel::from(playlist_rows(
+        &library::demo(),
+    )))));
+    let demo_tracks: Vec<_> = (0..model::DEMO_TRACKS.len())
+        .map(model::demo_track)
+        .collect();
+    if let Some(rows) = changed_tracks(&ModelRc::default(), &demo_tracks) {
+        ui.set_demo_songs(rows);
+    }
     #[cfg(target_os = "linux")]
     slint::set_xdg_app_id("spotifyrs")?;
     let settings_path = settings::path();
