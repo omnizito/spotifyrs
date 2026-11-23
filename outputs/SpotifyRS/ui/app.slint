@@ -1,6 +1,9 @@
 import { Button, LineEdit, ComboBox, CheckBox, Palette, AboutSlint, ListView, ScrollView, Slider } from "std-widgets.slint";
 
 export struct TrackRow {
+    art: image,
+    art-url: string,
+    demo-tone: int,
     uri: string,
     title: string,
     artist: string,
@@ -204,6 +207,19 @@ component TrackList inherits ListView {
                 font-size: 12px; vertical-alignment: center;
             }
             VerticalLayout {
+                width: 38px; alignment: center;
+                Rectangle {
+                    height: 38px; border-radius: 6px; clip: true; background: #302924;
+                    if track.art.width > 0 || track.demo-tone >= 0: Image {
+                        source: track.art.width > 0 ? track.art : Artwork.cover(track.demo-tone);
+                        image-fit: cover;
+                    }
+                    if track.art.width == 0 && track.demo-tone < 0: Text {
+                        text: "♪"; color: #c2a58e; horizontal-alignment: center; vertical-alignment: center;
+                    }
+                }
+            }
+            VerticalLayout {
                 horizontal-stretch: 1;
                 alignment: center;
                 spacing: 2px;
@@ -327,6 +343,9 @@ export component AppWindow inherits Window {
     }
     in property <string> track-title: "Ainda sem faixa";
     in property <string> track-uri;
+    in property <string> track-art-url;
+    in property <image> track-art;
+    in property <int> track-demo-tone: -1;
     in property <string> artist: "Escolhe o que queres ouvir";
     in property <string> device-name: "Sem dispositivo";
     in property <string> elapsed: "0:00";
@@ -803,8 +822,11 @@ export component AppWindow inherits Window {
                     Rectangle {
                         height: 44px; border-radius: 9px;
                         background: #292520; clip: true;
-                        if root.demo: Image { source: Artwork.cover(0); image-fit: cover; }
-                        if !root.demo: Text { text: "♪"; color: #e8eef9; font-size: 21px; horizontal-alignment: center; vertical-alignment: center; }
+                        if root.track-art.width > 0 || root.track-demo-tone >= 0: Image {
+                            source: root.track-art.width > 0 ? root.track-art : Artwork.cover(root.track-demo-tone);
+                            image-fit: cover;
+                        }
+                        if root.track-art.width == 0 && root.track-demo-tone < 0: Text { text: "♪"; color: #e8eef9; font-size: 21px; horizontal-alignment: center; vertical-alignment: center; }
                     }
                 }
                 VerticalLayout {

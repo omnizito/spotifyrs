@@ -18,6 +18,8 @@ use std::{
 };
 slint::include_modules!();
 
+mod track_art;
+
 fn dispatch(ui: &slint::Weak<AppWindow>, tx: &SyncSender<Command>, command: Command) {
     if let Some(ui) = ui.upgrade() {
         match tx.try_send(command) {
@@ -152,6 +154,19 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
         ui.set_devices(ModelRc::from(Rc::new(VecModel::from(names))));
         ui.set_selected_device(active.map(|i| i as i32).unwrap_or(-1));
     }
+    let art_url = p
+        .item
+        .as_ref()
+        .map_or_else(slint::SharedString::default, |item| {
+            if item.artwork_url().is_empty() && !item.uri.is_empty() {
+                track_art::known_url(ui, &item.uri)
+            } else {
+                item.artwork_url().into()
+            }
+        });
+    ui.set_track_art(track_art::image(art_url.as_str()));
+    ui.set_track_art_url(art_url);
+    ui.set_track_demo_tone(p.item.as_ref().map_or(-1, |item| demo_tone(&item.uri)));
     ui.set_busy(state.busy);
 }
 
@@ -203,6 +218,12 @@ fn render_library(ui: &AppWindow, library: &Library, playlists_changed: bool) {
     }
 }
 
+fn demo_tone(uri: &str) -> i32 {
+    uri.strip_prefix("demo:")
+        .and_then(|index| index.parse::<usize>().ok())
+        .map_or(-1, |index| (index % 3) as i32)
+}
+
 fn changed_tracks(
     existing: &ModelRc<TrackRow>,
     items: &[model::Item],
@@ -210,6 +231,9 @@ fn changed_tracks(
     let rows: Vec<_> = items
         .iter()
         .map(|item| TrackRow {
+            art: track_art::image(item.artwork_url()),
+            art_url: item.artwork_url().into(),
+            demo_tone: demo_tone(&item.uri),
             uri: item.uri.as_str().into(),
             title: item.name.as_str().into(),
             artist: item.artist_line().into(),
@@ -245,6 +269,7 @@ fn current_settings(ui: &AppWindow) -> Settings {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
+    track_art::start(&ui)?;
     ui.set_demo_preview(ModelRc::from(Rc::new(VecModel::from(playlist_rows(
         &library::demo(),
     )))));

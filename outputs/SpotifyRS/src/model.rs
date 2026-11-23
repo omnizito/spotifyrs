@@ -38,6 +38,18 @@ pub struct Artist {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+pub struct Album {
+    #[serde(default)]
+    images: Vec<AlbumImage>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+struct AlbumImage {
+    url: String,
+    width: Option<u32>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct Item {
     #[serde(default)]
     pub uri: String,
@@ -49,9 +61,18 @@ pub struct Item {
     pub duration_ms: u64,
     #[serde(default)]
     pub external_urls: HashMap<String, String>,
+    pub album: Option<Album>,
 }
 
 impl Item {
+    pub fn artwork_url(&self) -> &str {
+        self.album
+            .iter()
+            .flat_map(|album| &album.images)
+            .min_by_key(|image| image.width.unwrap_or(300).abs_diff(160))
+            .map_or("", |image| image.url.as_str())
+    }
+
     pub fn artist_line(&self) -> String {
         self.artists
             .iter()
