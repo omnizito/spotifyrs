@@ -1,16 +1,15 @@
 name: Desktop release
 on:
   push:
-    tags: ['v*']
+    branches: ['release/v0.1.0']
   workflow_dispatch:
 permissions:
   contents: read
 env:
   CARGO_INCREMENTAL: 0
-  SPOTIFYRS_BUILD_VERSION: ${{ github.ref_name }}
+  SPOTIFYRS_BUILD_VERSION: v0.1.0
 jobs:
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       matrix:
         os: [ubuntu-22.04, windows-2022]
@@ -20,6 +19,8 @@ jobs:
         working-directory: outputs/SpotifyRS
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v0.1.0
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libssl-dev libxkbcommon-x11-0 xvfb x11-utils
       - run: rustup toolchain install 1.99.1 --profile minimal
@@ -75,7 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: v0.1.0
         run: |
           sha256sum SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage > SHA256SUMS.txt
           gh release create "$TAG" --verify-tag --title "SpotifyRS $TAG" --notes 'Windows x64: extract the ZIP and open spotifyrs.exe. Linux x86_64: make the AppImage executable with chmod +x and launch it from your desktop. Use --demo to try it without credentials. Soloist is installed separately for local playback.' SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage SHA256SUMS.txt
