@@ -2,7 +2,7 @@
 
 # SpotifyRS
 
-Browse your Spotify library, choose what plays next, and control playback from a native desktop app for Windows and Linux. SpotifyRS is an independent, experimental project built with Rust and Slint. The interface is available in English and European Portuguese.
+Browse your Spotify library, choose what plays next, and control playback from a native desktop app for Windows and Linux. SpotifyRS is an independent, experimental project built with Rust and Slint. Its interface defaults to English and also supports European Portuguese.
 
 [Download for Windows x64](https://github.com/omnizito/spotifyrs/releases/latest/download/SpotifyRS-Windows-x64.zip) · [Download the Linux AppImage](https://github.com/omnizito/spotifyrs/releases/latest/download/SpotifyRS-Linux-x86_64.AppImage) · [Build from source](#build-from-source) · [Set up playback](#set-up-playback)
 
@@ -20,8 +20,10 @@ chmod +x SpotifyRS-Linux-x86_64.AppImage
 ```
 
 If FUSE is unavailable, use `./SpotifyRS-Linux-x86_64.AppImage --appimage-extract-and-run --demo`.
-1. To switch to English, open **Definições → Idioma da aplicação → English**.
-2. Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or skip a track and watch the local queue change.
+
+Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or skip a track and watch the local queue change.
+
+To change the language, open **Settings → App language**. SpotifyRS remembers your choice and shows the installed version under **Help → About**.
 
 The demo is silent and works without a Spotify account. To hear music, choose where you want it to play.
 
@@ -62,6 +64,7 @@ spotifyrs --demo
 
 ## Project notes
 
+- [Changelog](CHANGELOG.md)
 - [Architecture (Portuguese)](outputs/SpotifyRS/ARCHITECTURE.md) covers the native interface, playback worker, and Spotify integrations.
 - [Validation and measurements (Portuguese)](outputs/SpotifyRS/VALIDACAO.md) records which builds and scenarios were tested.
 - The project code uses the [MIT license](LICENSE). Bundled dependencies have their own [third-party notices](outputs/SpotifyRS/THIRD_PARTY_NOTICES.md).

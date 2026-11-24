@@ -67,6 +67,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -78,4 +79,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           sha256sum SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage > SHA256SUMS.txt
-          gh release create "$TAG" --verify-tag --title "SpotifyRS $TAG" --notes 'Windows x64: extract the ZIP and open spotifyrs.exe. Linux x86_64: make the AppImage executable with chmod +x and launch it from your desktop. Use --demo to try it without credentials. Soloist is installed separately for local playback.' SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage SHA256SUMS.txt
+          awk -v heading="## $TAG" '
+            $0 == heading { selected = 1; next }
+            selected && /^## / { exit }
+            selected { print }
+          ' ../CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" --verify-tag --title "SpotifyRS $TAG" --notes-file "$RUNNER_TEMP/release-notes.md" SpotifyRS-Windows-x64.zip SpotifyRS-Linux-x86_64.AppImage SHA256SUMS.txt

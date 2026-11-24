@@ -1,6 +1,6 @@
 # SpotifyRS — protótipo 0.1
 
-Companion desktop experimental em **Rust + Slint**, em português de Portugal. Interface nativa, sem Electron, Tauri, Svelte, JavaScript ou WebView incorporada. O nome SpotifyRS é provisório e interno: a política de marca do Spotify não permite nomes públicos que comecem por «Spot» sem permissão aplicável.
+Companion desktop experimental em **Rust + Slint**. A interface abre em inglês quando ainda não há uma preferência guardada. Para seguir este guia com os nomes dos menus em português, escolhe **Settings → App language → Português (Portugal)**. Interface nativa, sem Electron, Tauri, Svelte, JavaScript ou WebView incorporada. O nome SpotifyRS é provisório e interno: a política de marca do Spotify não permite nomes públicos que comecem por «Spot» sem permissão aplicável.
 
 ## Experimentar
 

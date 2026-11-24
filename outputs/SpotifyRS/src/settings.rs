@@ -9,8 +9,8 @@ pub const DEFAULT_ADDRESS: &str = "127.0.0.1:9090";
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
-    #[default]
     Portuguese,
+    #[default]
     English,
 }
 
@@ -93,17 +93,29 @@ mod tests {
             env::temp_dir().join(format!("spotifyrs-settings-{}.json", rand::random::<u64>()));
         let mut settings = Settings::load(&path);
         assert_eq!(settings.soloist_address, DEFAULT_ADDRESS);
+        assert_eq!(settings.language, Language::English);
         settings.soloist_address = "127.0.0.1:9191".into();
         settings.soloist_executable = "C:/SpotifyRS/soloist.exe".into();
         settings.client_id = "0123456789abcdef0123456789abcdef".into();
         settings.remember_soloist_key = true;
         settings.auto_start_soloist = true;
-        settings.language = Language::English;
+        settings.language = Language::Portuguese;
         settings.save(&path).unwrap();
         assert!(Settings::load(&path) == settings);
         settings.auto_start_soloist = false;
         settings.save(&path).unwrap();
         assert!(Settings::load(&path) == settings);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn settings_from_before_the_language_selector_use_english() {
+        let path =
+            env::temp_dir().join(format!("spotifyrs-settings-{}.json", rand::random::<u64>()));
+        fs::write(&path, r#"{"soloist_address":"127.0.0.1:9191"}"#).unwrap();
+        let settings = Settings::load(&path);
+        assert_eq!(settings.language, Language::English);
+        assert_eq!(settings.soloist_address, "127.0.0.1:9191");
         fs::remove_file(path).unwrap();
     }
 

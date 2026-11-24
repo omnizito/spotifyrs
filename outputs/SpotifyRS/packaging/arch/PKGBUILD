@@ -1,7 +1,7 @@
 # Package the sources from this checkout.
 pkgname=spotifyrs
-pkgver=0.1.0
-pkgrel=3
+pkgver=0.1.1
+pkgrel=1
 pkgdesc='Experimental native desktop companion for Spotify Connect'
 arch=('x86_64')
 url='https://github.com/omnizito/spotifyrs'

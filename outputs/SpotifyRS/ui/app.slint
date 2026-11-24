@@ -19,7 +19,7 @@ export struct PlaylistRow {
 
 
 global Language {
-    in-out property <int> index: 0;
+    in-out property <int> index: 1;
 
     pure public function text(portuguese: string, english: string) -> string {
         return root.index == 1 ? english : portuguese;
