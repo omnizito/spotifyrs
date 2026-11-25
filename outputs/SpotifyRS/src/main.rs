@@ -58,6 +58,7 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
     let p = &state.playback;
     ui.set_playing(p.is_playing);
     ui.set_can_toggle(state.fresh && p.permits(if p.is_playing { "pausing" } else { "resuming" }));
+    ui.set_can_seek(state.fresh && p.can_seek());
     ui.set_can_next(state.fresh && p.permits("skipping_next"));
     ui.set_shuffled(p.shuffle_state.unwrap_or(false));
     ui.set_can_shuffle(state.fresh && p.can_shuffle());
@@ -104,7 +105,15 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
             .into(),
     );
     let duration = p.item.as_ref().map(|i| i.duration_ms).unwrap_or(0);
-    let elapsed = p.progress_ms.unwrap_or(0).min(duration);
+    let since_update = state
+        .playback_updated_at
+        .filter(|_| state.fresh && p.is_playing)
+        .map_or(0, |at| at.elapsed().as_millis() as u64);
+    let elapsed = p
+        .progress_ms
+        .unwrap_or(0)
+        .saturating_add(since_update)
+        .min(duration);
     ui.set_elapsed(model::clock(elapsed).into());
     ui.set_duration(model::clock(duration).into());
     ui.set_elapsed_ms(elapsed.min(i32::MAX as u64) as i32);
@@ -123,11 +132,6 @@ fn render(ui: &AppWindow, state: Snapshot, library_changed: bool, playlists_chan
             .unwrap_or("https://open.spotify.com")
             .into(),
     );
-    ui.set_progress(if duration > 0 {
-        elapsed as f32 / duration as f32
-    } else {
-        0.0
-    });
     let active = state.devices.iter().position(|d| {
         p.device
             .as_ref()
@@ -475,6 +479,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bind!(on_demo_start, Command::Demo);
     bind!(on_forget_authorization, Command::ForgetAuthorization);
     bind!(on_load_queue, Command::LoadQueue);
+    ui.on_format_position(|ms| model::clock(ms.max(0) as u64).into());
+    {
+        let (weak, tx) = (ui.as_weak(), tx.clone());
+        ui.on_seek(move |uri, device, ms| {
+            dispatch(
+                &weak,
+                &tx,
+                Command::Seek {
+                    uri: uri.to_string(),
+                    device_id: device.to_string(),
+                    position_ms: ms.max(0) as u64,
+                },
+            )
+        });
+    }
     bind!(on_refresh, Command::Refresh);
     bind!(on_toggle, Command::Toggle);
     bind!(on_next, Command::Next);
@@ -525,9 +544,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .min(ui.get_duration_ms());
                 ui.set_elapsed_ms(elapsed);
                 ui.set_elapsed(model::clock(elapsed as u64).into());
-                if ui.get_duration_ms() > 0 {
-                    ui.set_progress(elapsed as f32 / ui.get_duration_ms() as f32);
-                }
             }
         });
     }

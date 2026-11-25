@@ -32,6 +32,14 @@ pub fn play_track(addr: SocketAddr, uri: &str) -> Result<Value, String> {
     )
 }
 
+pub fn seek(addr: SocketAddr, position_ms: u64) -> Result<Value, String> {
+    exchange(
+        addr,
+        "seek",
+        json!({"type":"command","command":"seek","position_ms":position_ms}),
+    )
+}
+
 pub fn set_volume(addr: SocketAddr, volume: u8) -> Result<Value, String> {
     exchange(
         addr,
@@ -100,7 +108,9 @@ fn exchange(addr: SocketAddr, command: &str, body: Value) -> Result<Value, Strin
             }
             if (command == "get_state" && value["type"] == "playback_state")
                 || (command == "get_queue" && value["type"] == "queue_changed")
-                || (value["type"] == "command_result" && value["command"] == command)
+                || (command != "get_queue"
+                    && value["type"] == "command_result"
+                    && value["command"] == command)
             {
                 let _ = socket.close(None);
                 return Ok(value);
@@ -144,6 +154,7 @@ pub fn playback(v: &Value) -> Playback {
         ..Default::default()
     };
     for (local, remote) in [
+        ("seeking", "seek"),
         ("pausing", "pause"),
         ("resuming", "play"),
         ("skipping_next", "skip_next"),
@@ -218,6 +229,33 @@ mod tests {
     }
 
     #[test]
+    fn seek_requires_the_local_action_and_sends_an_absolute_position() {
+        let mut state = json!({"is_active": true, "position":{"position_ms":12}, "item":{"uri":"track","decorations":{"playback":{"duration_ms":1500}}}, "available_actions":{}});
+        assert!(!playback(&state).can_seek());
+        state["available_actions"]["seek"] = json!({});
+        assert!(playback(&state).can_seek());
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut ws = tungstenite::accept(listener.accept().unwrap().0).unwrap();
+            let request: Value =
+                serde_json::from_str(ws.read().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(
+                request,
+                json!({"type":"command","command":"seek","position_ms":900})
+            );
+            ws.send(Message::Text(
+                json!({"type":"command_result","command":"seek"})
+                    .to_string()
+                    .into(),
+            ))
+            .unwrap();
+        });
+        seek(addr, 900).unwrap();
+        server.join().unwrap();
+    }
+
+    #[test]
     fn sends_volume_percentage_in_a_real_websocket_frame() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -239,6 +277,26 @@ mod tests {
         assert!(set_volume(addr, 35).is_ok());
         server.join().unwrap();
     }
+    #[test]
+    fn queue_waits_for_the_items_after_a_command_acknowledgement() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut ws = tungstenite::accept(listener.accept().unwrap().0).unwrap();
+            let request: Value =
+                serde_json::from_str(ws.read().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(request["command"], "get_queue");
+            for reply in [
+                json!({"type":"command_result","command":"get_queue"}),
+                json!({"type":"queue_changed","upcoming":[{"item":{"uri":"spotify:track:6rqhFgbbKwnb9MLmUQDhG6","decorations":{"identity":{"name":"Following track"}}}}]}),
+            ] {
+                ws.send(Message::Text(reply.to_string().into())).unwrap();
+            }
+        });
+        assert_eq!(queue(addr).unwrap()[0].name, "Following track");
+        server.join().unwrap();
+    }
+
     #[test]
     fn sends_selected_track_uri_in_a_real_websocket_frame() {
         const URI: &str = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6";

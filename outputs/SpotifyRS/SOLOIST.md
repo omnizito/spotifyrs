@@ -13,7 +13,7 @@ O SpotifyRS guarda o caminho do executável e o endereço local ao fechar. Marca
 ## Escolher o que ouvir
 
 - **Explorar.** Cola um link direto de faixa do Spotify ou um URI `spotify:track:…` e escolhe **Ouvir link**. O SpotifyRS abre a faixa no Soloist.
-- **Fila local.** Vê até dez faixas vindouras e escolhe **Ouvir** junto à que queres iniciar. **Atualizar fila** volta a consultar o Soloist.
+- **A seguir.** Vê até dez faixas vindouras e escolhe **Ouvir** junto à que queres iniciar. **Atualizar fila** volta a consultar o Soloist.
 - **Pesquisa.** Regista `http://127.0.0.1:8888/callback` na tua aplicação no Spotify for Developers. Em **Ligações**, cola o **Client ID** e escolhe **Autorizar catálogo**. Conclui a autorização no navegador e volta a **Explorar**. Podes pesquisar pelo título ou artista e ouvir uma faixa a partir dos resultados. A autorização do catálogo não pede acesso a controlos de reprodução.
 
 Usa **Ativar reprodução neste computador** em **Ligações** se o Soloist estiver emparelhado mas inativo. A barra inferior tem os controlos de reprodução. **Desligar** ou fechar a app termina o Soloist que o SpotifyRS iniciou. Se o iniciaste noutra aplicação, podes usar **Ligar Soloist local** com o endereço correspondente.

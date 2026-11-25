@@ -145,6 +145,18 @@ pub struct Playback {
 }
 
 impl Playback {
+    pub fn can_seek(&self) -> bool {
+        self.progress_ms.is_some()
+            && self.permits("seeking")
+            && self
+                .item
+                .as_ref()
+                .is_some_and(|item| item.duration_ms > 0 && !item.uri.is_empty())
+            && self.device.as_ref().is_some_and(|device| {
+                device.is_active && device.id.as_deref().is_some_and(|id| !id.is_empty())
+            })
+    }
+
     pub fn can_shuffle(&self) -> bool {
         self.shuffle_state.is_some()
             && self.permits("toggling_shuffle")

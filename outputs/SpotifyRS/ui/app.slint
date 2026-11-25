@@ -192,11 +192,79 @@ component PlaybackButton inherits FocusScope {
     }
 }
 
+component SeekBar inherits FocusScope {
+    in property <int> elapsed;
+    in property <int> duration;
+    in property <string> uri;
+    in property <string> device;
+    private property <string> drag-uri;
+    private property <string> drag-device;
+    private property <bool> dragging;
+    private property <int> pointed-ms: round(clamp((touch.mouse-x - 5px) / max(1px, root.width - 10px), 0, 1) * root.duration);
+    private property <float> fraction: root.duration > 0 ? clamp((root.dragging ? root.pointed-ms : root.elapsed) / root.duration, 0, 1) : 0;
+    pure callback format-position(int) -> string;
+    callback seek(int);
+    height: 22px; horizontal-stretch: 1;
+    accessible-role: slider;
+    accessible-label: Language.text("Posição na faixa", "Track position");
+    accessible-enabled: root.enabled;
+    accessible-value: root.elapsed / 1000;
+    accessible-value-minimum: 0;
+    accessible-value-maximum: root.duration / 1000;
+    accessible-value-step: 5;
+    accessible-action-set-value(v) => { if root.enabled && v.is-float() { root.seek(round(v.to-float() * 1000)); } }
+    accessible-action-increment => { if root.enabled { root.seek(root.elapsed + 5000); } }
+    accessible-action-decrement => { if root.enabled { root.seek(root.elapsed - 5000); } }
+    changed enabled => { if !root.enabled { root.dragging = false; } }
+    key-pressed(e) => {
+        if !root.enabled { return reject; }
+        if e.text == Key.RightArrow { root.seek(root.elapsed + 5000); return accept; }
+        if e.text == Key.LeftArrow { root.seek(root.elapsed - 5000); return accept; }
+        if e.text == Key.Home { root.seek(0); return accept; }
+        if e.text == Key.End { root.seek(root.duration - 1); return accept; }
+        return reject;
+    }
+    rail := Rectangle {
+        x: 5px; width: parent.width - 10px; height: 4px;
+        background: #544a43; border-radius: 2px;
+        Rectangle { x: 0; width: parent.width * root.fraction; height: 100%; border-radius: 2px; background: #f6bb87; }
+    }
+    if root.enabled: Rectangle {
+        width: touch.has-hover || root.has-focus ? 12px : 8px; height: self.width;
+        x: rail.x + rail.width * root.fraction - self.width / 2;
+        border-radius: self.width / 2; background: #ffe1c4;
+    }
+    if root.enabled && (touch.has-hover || root.dragging): Rectangle {
+        width: 52px; height: 23px; border-radius: 6px; background: #48372a;
+        x: clamp(touch.mouse-x - self.width / 2, 0px, root.width - self.width); y: -19px;
+        Text { text: root.format-position(root.pointed-ms); color: #fff1df; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+    }
+    touch := TouchArea {
+        enabled: root.enabled; mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.cancel { root.dragging = false; }
+            if event.button != PointerEventButton.left { return; }
+            if event.kind == PointerEventKind.down {
+                root.focus();
+                root.drag-uri = root.uri;
+                root.drag-device = root.device;
+                root.dragging = true;
+            } else if event.kind == PointerEventKind.up {
+                if root.dragging && root.drag-uri == root.uri && root.drag-device == root.device && root.enabled {
+                    root.seek(root.pointed-ms);
+                }
+                root.dragging = false;
+            }
+        }
+    }
+}
+
 component TrackList inherits ListView {
     in property <[TrackRow]> tracks;
     in property <string> current;
     in property <bool> ready;
     in property <bool> spotify-links;
+    in property <bool> compact;
     callback choose(string);
     callback source-link(string);
 
@@ -205,8 +273,9 @@ component TrackList inherits ListView {
         width: parent.width;
         border-radius: 7px;
         background: track.uri == root.current ? #382d25 : hit.has-hover ? #212630 : transparent;
+        property <bool> playable: root.ready && (!root.compact || track.uri.starts-with("demo:") || track.uri.starts-with("spotify:track:"));
         hit := TouchArea {
-            enabled: root.ready;
+            enabled: parent.playable;
             mouse-cursor: pointer;
             clicked => { root.choose(track.uri); }
         }
@@ -215,7 +284,7 @@ component TrackList inherits ListView {
             padding-right: 10px;
             spacing: 12px;
             alignment: stretch;
-            Text {
+            if !root.compact: Text {
                 width: 24px; text: track.uri == root.current ? "♪" : index + 1;
                 color: track.uri == root.current ? #f6bb87 : #9ca7b9;
                 font-size: 12px; vertical-alignment: center;
@@ -243,8 +312,8 @@ component TrackList inherits ListView {
                 }
                 Text { text: track.artist; color: #a6b0c0; font-size: 12px; overflow: elide; }
             }
-            Text { width: 47px; text: track.length; color: #a6b0c0; font-size: 12px; vertical-alignment: center; }
-            if root.spotify-links: VerticalLayout {
+            if !root.compact: Text { width: 47px; text: track.length; color: #a6b0c0; font-size: 12px; vertical-alignment: center; }
+            if root.spotify-links && (!root.compact || track.uri.starts-with("spotify:track:")): VerticalLayout {
                 width: 34px; alignment: center;
                 Button {
                     height: 30px; text: "↗";
@@ -258,7 +327,7 @@ component TrackList inherits ListView {
                 PlaybackButton {
                     glyph: @image-url("assets/play.svg");
                     label: Language.text("Ouvir ", "Play ") + track.title;
-                    enabled: root.ready;
+                    enabled: hit.enabled;
                     clicked => { root.choose(track.uri); }
                 }
             }
@@ -341,6 +410,25 @@ export component AppWindow inherits Window {
     in property <bool> playing;
     in property <bool> can-toggle;
     in property <bool> can-next;
+    in property <bool> can-seek;
+    callback seek(string, string, int);
+    pure callback format-position(int) -> string;
+    private property <bool> queue-open;
+    private property <bool> queue-dirty;
+    private property <string> queue-context: root.queue-open && (root.demo || root.connected) ?
+        (root.demo ? "demo" : root.soloist ? "soloist" : "connect") + "/" + root.volume-device + "/" + root.track-uri + "/" + (root.shuffled ? "1" : "0") : "";
+    changed queue-context => { root.refresh-queue(); }
+    function refresh-queue() {
+        root.queue-dirty = root.queue-context != "";
+        if root.queue-dirty && !root.busy {
+            root.queue-dirty = false;
+            root.load-queue();
+        }
+    }
+    Timer {
+        interval: 30s; running: root.queue-open && root.connected && !root.demo;
+        triggered => { root.refresh-queue(); }
+    }
     in property <bool> can-shuffle;
     in property <bool> shuffled;
     callback set-shuffle(bool);
@@ -359,6 +447,7 @@ export component AppWindow inherits Window {
         if !root.busy {
             root.volume-pending = false;
             root.send-queued-volume();
+            if root.queue-dirty { root.refresh-queue(); }
         }
     }
     in property <string> track-title: Language.text("Ainda sem faixa", "No track yet");
@@ -370,7 +459,6 @@ export component AppWindow inherits Window {
     in property <string> device-name: Language.text("Sem dispositivo", "No device");
     in property <string> elapsed: "0:00";
     in property <string> duration: "0:00";
-    in property <float> progress;
     in property <string> spotify-url: "https://open.spotify.com";
     in property <string> status: Language.text("Liga o Soloist ou experimenta a demonstração.", "Connect Soloist or try the demo.");
     in property <string> search-note;
@@ -493,8 +581,8 @@ export component AppWindow inherits Window {
                     }
                     Action { label: Language.text("Início", "Home"); symbol: "M3 11 L12 3 L21 11 M5 10 V21 H10 V15 H14 V21 H19 V10"; flat: true; selected: root.page == 0 && !root.search-view; clicked => { root.page = 0; root.search-view = false; } }
                     Action {
-                        label: Language.text("Fila local", "Local queue"); symbol: "M3 5 H21 M3 11 H17 M3 17 H12 M16 15 L22 18 L16 21 Z"; flat: true; selected: root.page == 1;
-                        clicked => { root.page = 1; if !root.busy && (root.demo || (root.soloist && root.connected)) { root.load-queue(); } }
+                        label: Language.text("A seguir", "Up next"); symbol: "M3 5 H21 M3 11 H17 M3 17 H12 M16 15 L22 18 L16 21 Z"; flat: true; selected: root.queue-open;
+                        clicked => { root.queue-open = !root.queue-open; }
                     }
                     Action { label: Language.text("Ligações", "Connections"); symbol: "M6 3 V8 M12 3 V8 M4 8 H14 V11 Q14 16 9 16 Q4 16 4 11 Z M9 16 V18 Q9 21 13 21 H16 Q20 21 20 17 V13"; flat: true; selected: root.page == 2; clicked => { root.page = 2; } }
                     Action {
@@ -561,9 +649,9 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-              border-radius: 11px; background: #191817; horizontal-stretch: 1;
+              border-radius: 11px; background: #191817; horizontal-stretch: 1; min-width: 0px; preferred-width: 0px;
               VerticalLayout {
-                horizontal-stretch: 1;
+                x: 0px; width: parent.width - (root.queue-open && root.width >= 1150px ? 338px : 0px);
                 padding-left: 24px; padding-right: 24px; padding-top: 14px; padding-bottom: 10px;
                 spacing: 12px;
                 HorizontalLayout {
@@ -723,29 +811,6 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                if root.page == 1: VerticalLayout {
-                    vertical-stretch: 1; spacing: 10px;
-                    HorizontalLayout {
-                        Text { text: Language.text("Fila local", "Local queue"); color: #f5f6fa; font-size: 27px; font-weight: 750; vertical-alignment: center; }
-                        Rectangle { horizontal-stretch: 1; }
-                        Button {
-                            text: Language.text("Atualizar fila", "Refresh queue"); enabled: !root.busy && (root.demo || (root.soloist && root.connected));
-                            clicked => { root.load-queue(); }
-                        }
-                    }
-                    Text {
-                        text: root.queue-note != "" ? root.translate-message(root.queue-note, root.language-index) : Language.text("Liga o Soloist para ver as próximas faixas.", "Connect Soloist to see upcoming tracks.");
-                        color: #b6c1d3; wrap: word-wrap;
-                    }
-                    TrackList {
-                        vertical-stretch: 1; tracks: root.queue; current: root.track-uri;
-                        ready: (root.demo || (root.soloist && root.connected)) && !root.busy;
-                        spotify-links: !root.demo;
-                        choose(uri) => { root.play-track(uri); }
-                        source-link(uri) => { root.open-content("track", uri); }
-                    }
-                }
-
                 if root.page == 4: VerticalLayout {
                     vertical-stretch: 1; spacing: 14px;
                     Text { text: Language.text("Definições", "Settings"); color: #f5f6fa; font-size: 27px; font-weight: 750; }
@@ -861,6 +926,49 @@ export component AppWindow inherits Window {
                     }
                 }
               }
+              if root.queue-open: Rectangle {
+                x: parent.width - self.width; width: 338px; height: parent.height;
+                background: #221f1d; border-radius: 11px; border-width: 1px; border-color: #463b33;
+                TouchArea {}
+                VerticalLayout {
+                    padding: 15px; spacing: 10px;
+                    HorizontalLayout {
+                        Text { text: Language.text("A seguir", "Up next"); color: #fff2e6; font-size: 23px; font-weight: 700; vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button { text: "↻"; accessible-label: Language.text("Atualizar fila", "Refresh queue"); enabled: root.queue-context != "" && !root.busy; clicked => { root.refresh-queue(); } }
+                        Button { text: "×"; accessible-label: Language.text("Fechar fila", "Close queue"); clicked => { root.queue-open = false; } }
+                    }
+                    if root.track-uri != "": Text { text: Language.text("Agora a tocar", "Now playing"); color: #f6bb87; font-weight: 650; }
+                    if root.track-uri != "": Rectangle {
+                        height: 58px; border-radius: 8px; background: #352b24;
+                        HorizontalLayout {
+                            padding: 8px; spacing: 10px;
+                            Rectangle {
+                                width: 42px; height: 42px; background: #544235; border-radius: 5px; clip: true;
+                                if root.track-art.width > 0 || root.track-demo-tone >= 0: Image { source: root.track-art.width > 0 ? root.track-art : Artwork.cover(root.track-demo-tone); image-fit: cover; }
+                                if root.track-art.width == 0 && root.track-demo-tone < 0: Text { text: "♪"; color: #f6bb87; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            VerticalLayout {
+                                alignment: center; spacing: 2px;
+                                Text { text: root.track-title; color: #fff2e6; font-weight: 650; overflow: elide; }
+                                Text { text: root.artist; color: #cfbfb1; font-size: 12px; overflow: elide; }
+                            }
+                        }
+                    }
+                    if root.queue-context != "": Text { text: Language.text("Próximas faixas", "Upcoming tracks"); color: #e3d6cb; font-weight: 650; }
+                    if root.queue-context == "" || root.queue-note != "" || root.queue.length == 0: Text {
+                        text: root.queue-context == "" ? Language.text("Liga um dispositivo para veres a fila.", "Connect a device to see the queue.") :
+                            root.queue-note != "" ? root.translate-message(root.queue-note, root.language-index) : Language.text("A carregar a fila…", "Loading queue…");
+                        color: #bdb1a8; wrap: word-wrap;
+                    }
+                    TrackList {
+                        compact: true; vertical-stretch: 1; tracks: root.queue-context != "" ? root.queue : [];
+                        ready: root.queue-context != "" && !root.busy; spotify-links: root.connected && !root.demo;
+                        choose(uri) => { root.play-track(uri); }
+                        source-link(uri) => { root.open-content("track", uri); }
+                    }
+                }
+              }
             }
         }
         Rectangle { height: 1px; background: #36312d; }
@@ -918,16 +1026,21 @@ export component AppWindow inherits Window {
                             enabled: root.can-next && !root.busy;
                             clicked => { root.next(); }
                         }
+                        PlaybackButton {
+                            glyph: @image-url("assets/queue.svg");
+                            label: Language.text("A seguir", "Up next"); active: root.queue-open;
+                            clicked => { root.queue-open = !root.queue-open; }
+                        }
                     }
                     HorizontalLayout {
                         spacing: 9px;
                         Text { text: root.elapsed; color: #aab5c7; font-size: 11px; vertical-alignment: center; }
-                        VerticalLayout {
-                            horizontal-stretch: 1; alignment: center;
-                            Rectangle {
-                                height: 4px; border-radius: 2px; background: #3b4354;
-                                Rectangle { x: 0px; y: 0px; width: parent.width * root.progress; height: 4px; border-radius: 2px; background: #f6bb87; }
-                            }
+                        SeekBar {
+                            elapsed: root.elapsed-ms; duration: root.duration-ms;
+                            uri: root.track-uri; device: root.volume-device;
+                            enabled: root.can-seek && !root.busy;
+                            format-position(ms) => { return root.format-position(ms); }
+                            seek(ms) => { root.seek(root.track-uri, root.volume-device, clamp(ms, 0, root.duration-ms - 1)); }
                         }
                         Text { text: root.duration; color: #aab5c7; font-size: 11px; vertical-alignment: center; }
                     }

@@ -40,7 +40,7 @@ Se o dispositivo for o Spotify desktop no mesmo computador, o consumo total incl
 
 O acesso real depende das permissões, disponibilidade e quotas da aplicação Spotify. Usar endpoints oficiais não garante aprovação do produto. O âmbito é uma ferramenta complementar compacta; uma substituição da experiência principal do Spotify exige análise e possível autorização escrita. Não existe lançamento público, distribuição comercial ou garantia de conformidade jurídica nesta entrega.
 
-A pesquisa mostra até dez faixas por consulta. A interface inclui a fila local do Soloist, a reprodução por link e a barra de controlos. Biblioteca pessoal, playlists, capas, volume e avanço para uma posição específica ficam para outra iteração.
+A pesquisa mostra até dez faixas por consulta. Abre **A seguir** no leitor para veres a faixa atual e as próximas enquanto navegas. Clica ou arrasta a barra de progresso para escolheres uma posição na faixa. A demonstração, o Soloist e o Spotify Connect permitem esta ação quando o dispositivo ativo suporta o avanço.
 
 ## Instalar no Arch Linux
 

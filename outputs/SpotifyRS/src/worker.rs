@@ -46,6 +46,11 @@ pub enum Command {
     Previous,
     SetShuffle(bool),
     SetVolume(u8),
+    Seek {
+        uri: String,
+        device_id: String,
+        position_ms: u64,
+    },
     Transfer(usize),
     Stop,
 }
@@ -66,6 +71,7 @@ pub struct Snapshot {
     pub queue: Arc<[Item]>,
     pub status: String,
     pub playback: Playback,
+    pub playback_updated_at: Option<Instant>,
     pub devices: Vec<Device>,
 }
 
@@ -171,7 +177,21 @@ pub fn run(
     let mut demo_updated_at = Instant::now();
     loop {
         let polling = (soloist.is_some() || (api.is_some() && !state.soloist)) && !suspended;
-        let wait = if polling {
+        let demo_remaining = state
+            .playback
+            .item
+            .as_ref()
+            .filter(|_| state.demo && state.playback.is_playing)
+            .map(|item| {
+                Duration::from_millis(
+                    item.duration_ms
+                        .saturating_sub(state.playback.progress_ms.unwrap_or(0)),
+                )
+                .saturating_sub(demo_updated_at.elapsed())
+            });
+        let wait = if let Some(remaining) = demo_remaining {
+            remaining
+        } else if polling {
             next_poll.saturating_duration_since(Instant::now())
         } else {
             Duration::from_secs(3600)
@@ -179,7 +199,7 @@ pub fn run(
         let mut command = match receiver.recv_timeout(wait) {
             Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return,
             Ok(command) => command,
-            Err(RecvTimeoutError::Timeout) if polling => Command::Poll,
+            Err(RecvTimeoutError::Timeout) if polling || demo_remaining.is_some() => Command::Poll,
             Err(RecvTimeoutError::Timeout) => continue,
         };
         let mut launch_note = None;
@@ -232,6 +252,8 @@ pub fn run(
                 state.connected = false;
                 state.fresh = false;
                 state.playback = Playback::default();
+                state.queue = Arc::default();
+                state.queue_note.clear();
                 state.devices.clear();
             }
             if !state.demo {
@@ -268,6 +290,19 @@ pub fn run(
                 );
             }
             demo_updated_at = Instant::now();
+            state.playback_updated_at = Some(demo_updated_at);
+            if state.playback.is_playing
+                && state
+                    .playback
+                    .item
+                    .as_ref()
+                    .is_some_and(|item| state.playback.progress_ms == Some(item.duration_ms))
+            {
+                demo_queue.step(true);
+                state.playback.item = Some(model::demo_track(demo_queue.current()));
+                state.playback.progress_ms = Some(0);
+                state.queue = demo_queue.upcoming().collect();
+            }
         }
         match &command {
             Command::RestoreAuthorization(id) => {
@@ -463,15 +498,18 @@ pub fn run(
                     Ok(demo_queue.upcoming().collect())
                 } else if let Some(address) = soloist {
                     crate::soloist::queue(address)
+                } else if let Some(api) = api.as_mut().filter(|_| state.connected && !state.soloist)
+                {
+                    api.queue().map_err(|error| error.to_string())
                 } else {
-                    Err("Liga o Soloist para ver as próximas faixas.".into())
+                    Err("Liga um dispositivo para veres a fila.".into())
                 };
                 state.queue = Arc::default();
                 state.queue_note = match result {
                     Ok(items) if items.is_empty() => "A fila está vazia.".into(),
                     Ok(items) => {
                         state.queue = items.into();
-                        "Escolhe uma faixa para a começar a ouvir agora.".into()
+                        String::new()
                     }
                     Err(error) => error,
                 };
@@ -543,6 +581,28 @@ pub fn run(
                 }
             }
         }
+        let seek = match &command {
+            Command::Seek {
+                uri,
+                device_id,
+                position_ms,
+            } if state.fresh && state.playback.can_seek() => state
+                .playback
+                .item
+                .as_ref()
+                .filter(|item| {
+                    &item.uri == uri
+                        && state.playback.device.as_ref().and_then(|d| d.id.as_ref())
+                            == Some(device_id)
+                })
+                .map(|item| {
+                    (
+                        device_id.as_str(),
+                        (*position_ms).min(item.duration_ms.saturating_sub(1)),
+                    )
+                }),
+            _ => None,
+        };
         if let Some(addr) = soloist {
             if matches!(command, Command::Logout | Command::Demo | Command::Login(_)) {
                 soloist = None;
@@ -562,6 +622,7 @@ pub fn run(
                 let sent = selected
                     .as_deref()
                     .map(|uri| crate::soloist::play_track(addr, uri))
+                    .or_else(|| seek.map(|(_, ms)| crate::soloist::seek(addr, ms)))
                     .or_else(|| action.map(|name| crate::soloist::request(addr, name)))
                     .or_else(|| match command {
                         Command::SetVolume(volume)
@@ -601,6 +662,7 @@ pub fn run(
                         state.connected = true;
                         state.fresh = true;
                         state.playback = crate::soloist::playback(&value);
+                        state.playback_updated_at = Some(Instant::now());
                         state.devices = state.playback.device.clone().into_iter().collect();
                         state.status = "Soloist ligado · reprodução local neste computador".into();
                         if std::mem::take(&mut activate_when_paired)
@@ -609,7 +671,9 @@ pub fn run(
                         {
                             match crate::soloist::request(addr, "activate") {
                                 Ok(_) => {
-                                    state.status = "Pedido enviado ao Soloist. A atualizar a reprodução…".into();
+                                    state.status =
+                                        "Pedido enviado ao Soloist. A atualizar a reprodução…"
+                                            .into();
                                     state.busy = true;
                                     poll_delay = Duration::from_millis(650);
                                 }
@@ -725,6 +789,7 @@ pub fn run(
                         .collect::<Vec<_>>()
                         .into(),
                     playback: model::demo_playback(0, false),
+                    queue: demo_queue.upcoming().collect(),
                     status: "Demonstração · dados fictícios · sem áudio ou pedidos à API".into(),
                     ..Default::default()
                 };
@@ -732,6 +797,11 @@ pub fn run(
                 demo_updated_at = Instant::now();
             }
             _ if state.demo => match command {
+                Command::Seek { .. } => {
+                    if let Some((_, ms)) = seek {
+                        state.playback.progress_ms = Some(ms);
+                    }
+                }
                 Command::Toggle => state.playback.is_playing = !state.playback.is_playing,
                 Command::Next | Command::Previous => {
                     demo_queue.step(matches!(command, Command::Next));
@@ -800,6 +870,12 @@ pub fn run(
                     confirm_change = true;
                 }
             }
+            Command::Seek { .. } => {
+                if let (Some(api), Some((device_id, ms))) = (api.as_mut(), seek) {
+                    result = api.seek(device_id, ms);
+                    confirm_change = true;
+                }
+            }
             Command::SetShuffle(enabled) if state.fresh && state.playback.can_shuffle() => {
                 if let (Some(api), Some(device_id)) = (
                     api.as_mut(),
@@ -842,6 +918,7 @@ pub fn run(
             if let Some(ref mut api) = api {
                 result = api.playback().map(|playback| {
                     state.playback = playback;
+                    state.playback_updated_at = Some(Instant::now());
                     state.fresh = true;
                     state.status = if state.playback.device.is_some() {
                         "Ligado ao Spotify · áudio no dispositivo selecionado"
@@ -919,7 +996,10 @@ mod tests {
                     "get_auth_state",
                     json!({"type": "auth_state", "logged_in": false}),
                 ),
-                ("get_state", json!({"type": "auth_state", "logged_in": false})),
+                (
+                    "get_state",
+                    json!({"type": "auth_state", "logged_in": false}),
+                ),
                 ("get_state", inactive.clone()),
                 (
                     "activate",
@@ -979,6 +1059,51 @@ mod tests {
         tx.send(Command::Stop).unwrap();
         worker.join().unwrap();
         server.join().unwrap();
+    }
+
+    #[test]
+    fn demo_seek_checks_the_target_and_advances_into_the_queue() {
+        let (tx, rx) = mpsc::sync_channel(4);
+        let (events, updates) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            run(rx, Arc::new(AtomicBool::new(false)), |state| {
+                events.send(state).unwrap()
+            })
+        });
+        let snapshot = || updates.recv_timeout(Duration::from_secs(3)).unwrap();
+        tx.send(Command::Demo).unwrap();
+        let initial = snapshot();
+        let current = initial.playback.item.unwrap();
+        for (uri, device_id, expected) in [
+            ("demo:1", "demo", 72000),
+            ("demo:0", "other", 72000),
+            ("demo:0", "demo", 40000),
+        ] {
+            tx.send(Command::Seek {
+                uri: uri.into(),
+                device_id: device_id.into(),
+                position_ms: 40000,
+            })
+            .unwrap();
+            assert_eq!(snapshot().playback.progress_ms, Some(expected));
+        }
+        tx.send(Command::Seek {
+            uri: current.uri,
+            device_id: "demo".into(),
+            position_ms: u64::MAX,
+        })
+        .unwrap();
+        assert_eq!(
+            snapshot().playback.progress_ms,
+            Some(current.duration_ms - 1)
+        );
+        tx.send(Command::Toggle).unwrap();
+        assert!(snapshot().playback.is_playing);
+        let next = snapshot();
+        assert_eq!(next.playback.item.unwrap().uri, initial.queue[0].uri);
+        assert_eq!(next.queue[0].uri, initial.queue[1].uri);
+        tx.send(Command::Stop).unwrap();
+        worker.join().unwrap();
     }
 
     #[test]

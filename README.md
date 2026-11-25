@@ -21,7 +21,7 @@ chmod +x SpotifyRS-Linux-x86_64.AppImage
 
 If FUSE is unavailable, use `./SpotifyRS-Linux-x86_64.AppImage --appimage-extract-and-run --demo`.
 
-Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or skip a track and watch the local queue change.
+Open **Connections → Try the demo**. Pick one of the three sample playlists, search for *Linha Clara*, or open **Up next** in the player. The panel shows the current track and the upcoming songs while you browse. Click or drag the progress bar to jump within a track. With the bar focused, the arrow keys move five seconds at a time.
 
 To change the language, open **Settings → App language**. SpotifyRS remembers your choice and shows the installed version under **Help → About**.
 
@@ -34,7 +34,7 @@ The demo is silent and works without a Spotify account. To hear music, choose wh
 | On this computer | The official Soloist executable and a Soloist key | Open **Connections**, enter the executable path and key, then select **Start and connect Soloist**. For the first pairing, select **SpotifyRS local** in Spotify’s device picker on the same network. |
 | On a phone, speaker, or another computer | Spotify Premium, a Spotify developer app, and a Spotify Connect device | Start a track on the device. In SpotifyRS, enter your Client ID under **Connections**, choose **Connect via Web API**, then select the device and **Use device**. |
 
-With Soloist connected, paste a Spotify track link into **Home** and choose **Play link**, or open **Local queue** to pick an upcoming track. If you want the app to activate this computer whenever it opens, enable **Start and activate Soloist on launch**. [Soloist setup guide (Portuguese)](outputs/SpotifyRS/SOLOIST.md)
+With Soloist connected, paste a Spotify track link into **Home** and choose **Play link**, or open **Up next** to pick an upcoming track. If you want the app to activate this computer whenever it opens, enable **Start and activate Soloist on launch**. [Soloist setup guide (Portuguese)](outputs/SpotifyRS/SOLOIST.md)
 
 ### Bring in your library
 

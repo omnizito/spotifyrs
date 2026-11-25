@@ -220,6 +220,30 @@ impl SpotifyApi {
         Ok(self.get("/me/player")?.unwrap_or_default())
     }
 
+    pub fn queue(&mut self) -> Result<Vec<Item>, ApiError> {
+        #[derive(Deserialize)]
+        struct Queue {
+            queue: Vec<Option<Item>>,
+        }
+        Ok(self
+            .get::<Queue>("/me/player/queue")?
+            .into_iter()
+            .flat_map(|response| response.queue)
+            .flatten()
+            .filter(|item| !item.name.is_empty())
+            .take(50)
+            .collect())
+    }
+
+    pub fn seek(&mut self, device_id: &str, position_ms: u64) -> Result<(), ApiError> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("position_ms", &position_ms.to_string())
+            .append_pair("device_id", device_id)
+            .finish();
+        self.request(Method::PUT, &format!("/me/player/seek?{query}"), None)
+            .map(|_| ())
+    }
+
     pub fn playlists(&mut self, offset: usize) -> Result<(Vec<Playlist>, bool), ApiError> {
         let page = self
             .get::<Page<Playlist>>(&format!("/me/playlists?limit={PAGE_SIZE}&offset={offset}"))?
@@ -452,6 +476,34 @@ mod tests {
         let (mut api, server) = mock("204 No Content", "", "");
         assert!(api.playback().unwrap().item.is_none());
         assert!(server.join().unwrap().starts_with("GET /me/player "));
+    }
+
+    #[test]
+    fn seek_targets_the_active_device_in_milliseconds() {
+        let (mut api, server) = mock("204 No Content", "", "");
+        api.seek("room A", 95000).unwrap();
+        assert!(server
+            .join()
+            .unwrap()
+            .starts_with("PUT /me/player/seek?position_ms=95000&device_id=room+A "));
+    }
+
+    #[test]
+    fn queue_preserves_order_and_repeats_and_excludes_currently_playing() {
+        let (mut api, server) = mock(
+            "200 OK",
+            "",
+            r#"{"currently_playing":{"name":"Current"},"queue":[{"name":"Second"},null,{"name":"Third"},{"name":"Second"}]}"#,
+        );
+        let queue = api.queue().unwrap();
+        assert_eq!(
+            queue
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Second", "Third", "Second"]
+        );
+        assert!(server.join().unwrap().starts_with("GET /me/player/queue "));
     }
 
     #[test]

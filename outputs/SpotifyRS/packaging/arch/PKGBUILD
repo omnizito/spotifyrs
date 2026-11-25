@@ -1,6 +1,6 @@
 # Package the sources from this checkout.
 pkgname=spotifyrs
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc='Experimental native desktop companion for Spotify Connect'
 arch=('x86_64')

@@ -36,7 +36,7 @@ pub fn english(message: &str) -> Cow<'_, str> {
         "Autoriza o catálogo em Ligações para pesquisar por nome." => "Authorise the catalogue in Connections to search by name.",
         "Não foram encontradas faixas." => "No tracks found.",
         "1 faixa encontrada" => "1 track found",
-        "Liga o Soloist para ver as próximas faixas." => "Connect Soloist to see upcoming tracks.",
+        "Liga um dispositivo para veres a fila." => "Connect a device to see the queue.",
         "A fila está vazia." => "The queue is empty.",
         "Escolhe uma faixa para a começar a ouvir agora." => "Choose a track to play it now.",
         "Escolhe uma das faixas de exemplo." => "Choose one of the sample tracks.",
